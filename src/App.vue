@@ -8,14 +8,8 @@
           :active-tab="activeSidebarTab"
           @change="handleSidebarTabChange"
         />
-        <ImageList
-          v-if="activeSidebarTab === 'images'"
-          :images="imageList"
-          :current-index="currentIndex"
-          @add-images="handleAddImages"
-          @select="handleSelectImage"
-          @remove="handleRemoveImage"
-        />
+        <ImageList v-if="activeSidebarTab === 'images'" />
+        <TextResultList v-else :voice-role-options="voiceRoleOptions" />
       </div>
 
       <!-- 中间画布区域 -->
@@ -36,8 +30,10 @@
 
         <!-- 底部控制栏 -->
         <BottomToolbar
-          :current-page="imageList.length > 0 ? currentIndex + 1 : 0"
-          :total-pages="imageList.length"
+          :current-page="
+            ocrStore.images.length > 0 ? ocrStore.currentIndex + 1 : 0
+          "
+          :total-pages="ocrStore.images.length"
           :display-zoom="displayZoom"
           :has-image="!!currentImage"
           :ocr-loading="ocrLoading"
@@ -69,14 +65,16 @@
 import { ref, computed, onMounted, onUnmounted, nextTick } from "vue";
 import { useEventListener } from "@vueuse/core";
 import { NConfigProvider, NModal } from "naive-ui";
+import { useOcrStore } from "./stores/ocrStore";
 import Canvas from "./components/Canvas.vue";
 import ImageList from "./components/ImageList.vue";
+import TextResultList from "./components/TextResultList.vue";
 import SettingsPanel from "./components/SettingsPanel.vue";
 import BottomToolbar from "./components/BottomToolbar.vue";
 import SidebarTabs from "./components/SidebarTabs.vue";
 import { useOcr } from "./composables/useOcr.js";
 import { canvasEventBus, uiEventBus } from "./core/event-bus";
-import type { ImageItem, OcrTextResult } from "./types/index";
+import type { OcrTextResult, OcrTextDetail } from "./types/index";
 
 const themeOverrides = {
   common: {
@@ -89,9 +87,8 @@ type SidebarTab = "images" | "text";
 
 const canvasRef = ref<InstanceType<typeof Canvas>>();
 const showSettings = ref(false);
-const imageList = ref<ImageItem[]>([]);
-const currentIndex = ref(0);
-const ocrLoading = ref(false);
+const ocrStore = useOcrStore();
+const ocrLoading = computed(() => ocrStore.ocrLoading);
 const zoomLevel = ref(1);
 const isWaitingMode = ref(false);
 const sidebarTabs: Array<{ key: SidebarTab; label: string }> = [
@@ -100,10 +97,16 @@ const sidebarTabs: Array<{ key: SidebarTab; label: string }> = [
 ];
 const activeSidebarTab = ref<SidebarTab>("images");
 
-const currentImage = computed(() => {
-  if (imageList.value.length === 0) return null;
-  return imageList.value[currentIndex.value];
-});
+// 语音角色选项（微软 TTS 示例）
+const voiceRoleOptions = [
+  { label: "默认", value: "" },
+  { label: "晓晓（女）", value: "zh-CN-XiaoxiaoNeural" },
+  { label: "晓梅（女）", value: "zh-CN-XiaomeiNeural" },
+  { label: "云皓（男）", value: "zh-CN-YunhaoNeural" },
+  { label: "云枫（男）", value: "zh-CN-YunfengNeural" },
+];
+
+const currentImage = computed(() => ocrStore.currentImage);
 
 const displayZoom = computed(() => {
   const zoom = zoomLevel.value;
@@ -115,53 +118,19 @@ const displayZoom = computed(() => {
 
 const { handleOcr: performOcr } = useOcr();
 
-const handleAddImages = (files: File[]) => {
-  files.forEach((file) => {
-    if (file.type.startsWith("image/")) {
-      const url = URL.createObjectURL(file);
-      imageList.value.push({
-        file,
-        url,
-        ocrResult: null,
-        ocrLoading: false,
-      });
-    }
-  });
-  if (imageList.value.length > 0) {
-    currentIndex.value = imageList.value.length - 1;
-  }
-};
-
-const handleSelectImage = (index: number) => {
-  if (index >= 0 && index < imageList.value.length) {
-    currentIndex.value = index;
-    canvasEventBus.emit("canvas:zoom-reset");
-  }
-};
-
-const handleRemoveImage = (index: number) => {
-  if (imageList.value.length > 0) {
-    URL.revokeObjectURL(imageList.value[index].url);
-    imageList.value.splice(index, 1);
-    if (currentIndex.value >= imageList.value.length) {
-      currentIndex.value = Math.max(0, imageList.value.length - 1);
-    }
-  }
-};
-
 const handleOcr = async () => {
   if (!currentImage.value) return;
-  ocrLoading.value = true;
+  ocrStore.ocrLoading = true;
   currentImage.value.ocrLoading = true;
   try {
     const result = await performOcr(currentImage.value.file);
     if (currentImage.value) {
-      currentImage.value.ocrResult = result;
+      ocrStore.setCurrentOcrResult(result);
     }
   } catch (error) {
     console.error("OCR识别失败:", error);
   } finally {
-    ocrLoading.value = false;
+    ocrStore.ocrLoading = false;
     if (currentImage.value) {
       currentImage.value.ocrLoading = false;
     }
@@ -170,7 +139,15 @@ const handleOcr = async () => {
 
 const handleChangeDetail = (result: OcrTextResult) => {
   if (currentImage.value) {
-    currentImage.value.ocrResult = result;
+    ocrStore.setCurrentOcrResult({
+      ...result,
+      details: result.details.map((detail) => ({
+        ...detail,
+        // 补全可能缺失的翻译/原文字段，保证文本列表展示正常
+        translatedText: detail.translatedText ?? detail.text,
+        originText: detail.originText ?? detail.text,
+      })),
+    });
   }
 };
 
@@ -180,7 +157,7 @@ const handleClearCanvas = () => {
     // 先清除画布上的OCR框
     canvasRef.value?.clearOcrResults();
     // 然后清空数据，这会触发 watch 再次清除（双重保险）
-    currentImage.value.ocrResult = null;
+    ocrStore.clearCurrentOcrResult();
   }
 };
 
@@ -312,17 +289,16 @@ const handleWaitingRectComplete = async (rect: {
     });
 
     // 合并到对应图片的 OCR 结果中（确保图片和结果列表绑定）
-    // 创建新对象避免直接修改，确保 watch 能正确触发
     if (targetImage.ocrResult) {
-      targetImage.ocrResult = {
+      ocrStore.setCurrentOcrResult({
         ...targetImage.ocrResult,
         details: [...targetImage.ocrResult.details, ...originalImageDetails],
-      };
+      });
     } else {
-      targetImage.ocrResult = {
+      ocrStore.setCurrentOcrResult({
         ...ocrResult,
         details: originalImageDetails,
-      };
+      });
     }
 
     // 删除等待识别框
@@ -341,15 +317,7 @@ const handleWaitingRectComplete = async (rect: {
 };
 
 const handleDeleteDetail = (detailIndex: number) => {
-  const targetImage = currentImage.value;
-  if (!targetImage?.ocrResult) return;
-  const details = targetImage.ocrResult.details.filter(
-    (_detail, index) => index !== detailIndex
-  );
-  targetImage.ocrResult = {
-    ...targetImage.ocrResult,
-    details,
-  };
+  ocrStore.deleteCurrentDetail(detailIndex);
 };
 
 const handleReOcrDetail = async (detailIndex: number) => {
@@ -382,10 +350,7 @@ const handleReOcrDetail = async (detailIndex: number) => {
     const nextDetails = [...targetImage.ocrResult.details];
     nextDetails.splice(detailIndex, 1, ...transformedDetails);
 
-    targetImage.ocrResult = {
-      ...targetImage.ocrResult,
-      details: nextDetails,
-    };
+    ocrStore.replaceCurrentDetails(nextDetails);
   } catch (error) {
     console.error("局部重新识别失败:", error);
   }

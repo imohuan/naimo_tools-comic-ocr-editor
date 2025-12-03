@@ -62,21 +62,30 @@ export function useOcr() {
                   Array.isArray(jsonData.translations)
                 ) {
                   const result: OcrTextResult = {
-                    details: jsonData.translations.map((trans: any) => ({
-                      text: trans.text || "",
-                      minX: trans.minX,
-                      minY: trans.minY,
-                      maxX: trans.maxX,
-                      maxY: trans.maxY,
-                      textColor: trans.text_color
-                        ? {
-                            fg: trans.text_color.fg || [0],
-                            bg: trans.text_color.bg || [255],
-                          }
-                        : undefined,
-                      language: trans.language,
-                      background: trans.background || null,
-                    })),
+                    details: jsonData.translations.map((trans: any) => {
+                      // 优先使用后端提供的原文/译文字段，如果没有则退化为同一字段
+                      const translatedText = trans.text || "";
+                      const originText =
+                        trans.origin_text || trans.source || translatedText;
+
+                      return {
+                        text: translatedText,
+                        translatedText,
+                        originText,
+                        minX: trans.minX,
+                        minY: trans.minY,
+                        maxX: trans.maxX,
+                        maxY: trans.maxY,
+                        textColor: trans.text_color
+                          ? {
+                              fg: trans.text_color.fg || [0],
+                              bg: trans.text_color.bg || [255],
+                            }
+                          : undefined,
+                        language: trans.language,
+                        background: trans.background || null,
+                      };
+                    }),
                     img: null,
                     detection_size: jsonData.detection_size || 1536,
                   };

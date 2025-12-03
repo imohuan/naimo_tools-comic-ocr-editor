@@ -1,5 +1,11 @@
 export interface OcrTextDetail {
   text: string;
+  // 翻译后的文本（默认与 text 同步，用于右侧编辑区域）
+  translatedText?: string;
+  // 原始识别文本（用于折叠展示原文）
+  originText?: string;
+  // 人物配音角色标识（微软 TTS 角色）
+  voiceRole?: string;
   minX: number;
   minY: number;
   maxX: number;

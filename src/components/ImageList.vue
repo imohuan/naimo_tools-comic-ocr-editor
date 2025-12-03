@@ -156,23 +156,11 @@
 </template>
 
 <script setup lang="ts">
-import { ref, onMounted, onUnmounted } from "vue";
+import { ref, onMounted, onUnmounted, computed } from "vue";
 import { uiEventBus } from "../core/event-bus";
-import type { ImageItem } from "../types";
+import { useOcrStore } from "../stores/ocrStore";
 
-interface Props {
-  images: ImageItem[];
-  currentIndex: number;
-}
-
-interface Emits {
-  (e: "add-images", files: File[]): void;
-  (e: "select", index: number): void;
-  (e: "remove", index: number): void;
-}
-
-defineProps<Props>();
-const emit = defineEmits<Emits>();
+const store = useOcrStore();
 
 const uploadArea = ref<HTMLDivElement>();
 const fileInput = ref<HTMLInputElement>();
@@ -207,7 +195,7 @@ const handleDrop = (e: DragEvent) => {
   isDragOver.value = false;
   const files = Array.from(e.dataTransfer?.files || []);
   if (files.length > 0) {
-    emit("add-images", files);
+    store.addImages(files);
   }
 };
 
@@ -215,18 +203,21 @@ const handleFileChange = (e: Event) => {
   const target = e.target as HTMLInputElement;
   const files = Array.from(target.files || []);
   if (files.length > 0) {
-    emit("add-images", files);
+    store.addImages(files);
   }
   target.value = "";
 };
 
 const selectImage = (index: number) => {
-  emit("select", index);
+  store.selectImage(index);
 };
 
 const removeImage = (index: number) => {
-  emit("remove", index);
+  store.removeImage(index);
 };
+
+const images = computed(() => store.images);
+const currentIndex = computed(() => store.currentIndex);
 </script>
 
 <style scoped>
