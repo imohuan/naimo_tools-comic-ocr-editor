@@ -1,4 +1,4 @@
-import { ref, type Ref } from "vue";
+import { ref, type Ref, watch } from "vue";
 import { useElementSize } from "@vueuse/core";
 import * as fabric from "fabric";
 import type { ImageRect } from "../core/canvas-utils";
@@ -36,6 +36,15 @@ export function useCanvas(
       fabricCanvas.value.setHeight(height.value);
     }
   };
+
+  // 监听容器尺寸变化，动态调整 canvas 尺寸
+  watch(
+    [width, height],
+    () => {
+      resizeCanvas();
+    },
+    { immediate: true }
+  );
 
   const loadImage = async (image: File | string) => {
     if (!fabricCanvas.value || !image) return;

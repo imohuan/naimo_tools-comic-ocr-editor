@@ -303,6 +303,10 @@ export class WaitingRect extends fabric.Rect {
   }
 
   _render(ctx: CanvasRenderingContext2D) {
+    // 先让 fabric 绘制基础矩形（包含阴影、填充、虚线边框）
+    // 避免在自定义渲染中重复填充/描边导致重影
+    super._render(ctx);
+
     ctx.save();
 
     const x = -this.width / 2;
@@ -311,17 +315,8 @@ export class WaitingRect extends fabric.Rect {
     const radiusY = this.ry || 0;
 
     const accent = this.accentColor || DEFAULT_ACCENT_COLOR;
-    const baseFill =
-      (typeof this.fill === "string" && this.fill) || hexToRgba(accent, 0.08);
 
-    // 绘制基础填充
-    ctx.save();
-    drawRoundedRectPath(ctx, x, y, this.width, this.height, radiusX, radiusY);
-    ctx.fillStyle = baseFill;
-    ctx.fill();
-    ctx.restore();
-
-    // 绘制柔和斜纹背景
+    // 绘制柔和斜纹背景（只叠加效果，不再重复基础填充）
     ctx.save();
     drawRoundedRectPath(ctx, x, y, this.width, this.height, radiusX, radiusY);
     ctx.clip();
@@ -378,12 +373,20 @@ export class WaitingRect extends fabric.Rect {
     ctx.fillStyle = accent;
     ctx.shadowColor = hexToRgba(accent, 0.35);
     ctx.shadowBlur = 10;
+    ctx.shadowOffsetX = 0;
+    ctx.shadowOffsetY = 0;
     ctx.fill();
 
+    // 重置阴影，避免影响后续绘制导致视觉残影
+    ctx.shadowColor = "transparent";
     ctx.shadowBlur = 0;
+    ctx.shadowOffsetX = 0;
+    ctx.shadowOffsetY = 0;
+
     ctx.fillStyle = "#ffffff";
     ctx.fillText(labelText, labelX + labelWidth / 2, labelY + labelHeight / 2);
 
+    // 扫描高光，仅作为叠加效果，不改变基础填充
     if (typeof this.scanLineX !== "undefined") {
       ctx.save();
       drawRoundedRectPath(ctx, x, y, this.width, this.height, radiusX, radiusY);
@@ -401,15 +404,6 @@ export class WaitingRect extends fabric.Rect {
       ctx.fillRect(x, y, this.width, this.height);
       ctx.restore();
     }
-
-    // 绘制虚线边框
-    ctx.save();
-    ctx.setLineDash(this.strokeDashArray || [14, 10]);
-    ctx.lineWidth = this.strokeWidth || 2;
-    ctx.strokeStyle = accent;
-    drawRoundedRectPath(ctx, x, y, this.width, this.height, radiusX, radiusY);
-    ctx.stroke();
-    ctx.restore();
 
     ctx.restore();
   }

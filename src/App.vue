@@ -41,6 +41,7 @@
           :display-zoom="displayZoom"
           :has-image="!!currentImage"
           :ocr-loading="ocrLoading"
+          :waiting-mode="isWaitingMode"
           @zoom-in="handleZoomIn"
           @zoom-out="handleZoomOut"
           @zoom-reset="handleZoomReset"

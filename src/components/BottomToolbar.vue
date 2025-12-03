@@ -132,9 +132,9 @@
       <ToolbarButton
         :disabled="!hasImage"
         :shortcut="waitingModeShortcut"
-        :title="isWaitingMode ? '关闭等待识别框模式' : '开启等待识别框模式'"
+        :title="waitingMode ? '关闭等待识别框模式' : '开启等待识别框模式'"
         :class="
-          isWaitingMode
+          waitingMode
             ? 'bg-blue-600! text-white hover:bg-blue-700! shadow-lg'
             : 'hover:bg-blue-50'
         "
@@ -180,7 +180,7 @@
 </template>
 
 <script setup lang="ts">
-import { ref, onMounted, onUnmounted } from "vue";
+import { onMounted, onUnmounted } from "vue";
 import ToolbarButton from "./ToolbarButton.vue";
 import { useKeyboardShortcuts } from "../composables/useKeyboardShortcuts.js";
 
@@ -190,6 +190,8 @@ interface Props {
   displayZoom: string;
   hasImage: boolean;
   ocrLoading: boolean;
+  // 是否处于等待识别框模式，由父组件控制，保证默认关闭
+  waitingMode?: boolean;
 }
 
 interface Emits {
@@ -202,7 +204,9 @@ interface Emits {
   (e: "toggle-waiting-mode", enabled: boolean): void;
 }
 
-const props = defineProps<Props>();
+const props = withDefaults(defineProps<Props>(), {
+  waitingMode: false,
+});
 const emit = defineEmits<Emits>();
 
 // 按钮上显示的快捷键（空字符串表示不显示）
@@ -252,12 +256,10 @@ const handleSettings = () => {
   emit("settings");
 };
 
-const isWaitingMode = ref(false);
-
 const handleToggleWaitingMode = () => {
   if (props.hasImage) {
-    isWaitingMode.value = !isWaitingMode.value;
-    emit("toggle-waiting-mode", isWaitingMode.value);
+    const next = !props.waitingMode;
+    emit("toggle-waiting-mode", next);
   }
 };
 

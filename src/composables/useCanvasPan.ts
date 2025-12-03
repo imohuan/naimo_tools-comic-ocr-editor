@@ -1,6 +1,9 @@
 import { watch, onUnmounted, type Ref } from "vue";
 
-export function useCanvasPan(fabricCanvas: Ref<any>) {
+export function useCanvasPan(
+  fabricCanvas: Ref<any>,
+  isWaitingMode?: Ref<boolean>
+) {
   let isPanning = false;
   let lastPanPoint = { x: 0, y: 0 };
   let isRightMouseDown = false;
@@ -11,16 +14,23 @@ export function useCanvasPan(fabricCanvas: Ref<any>) {
     const e = opt.e as MouseEvent;
     if (!e) return;
 
-    // 支持 Alt+左键 或 右键拖拽
+    // 支持 Alt+左键 或 右键拖拽 => 进入平移模式
     if (e.altKey === true || e.button === 2) {
       isPanning = true;
       isRightMouseDown = e.button === 2;
       lastPanPoint = { x: e.clientX, y: e.clientY };
       fabricCanvas.value.defaultCursor = "move";
+      // 仅在拖拽时临时关闭 selection，防止出现框选高亮
       fabricCanvas.value.selection = false;
       e.preventDefault();
       e.stopPropagation();
+      return;
     }
+
+    // 普通左键行为：根据等待模式决定是否允许框选
+    // isWaitingMode === true 时关闭 selection，其余情况开启 selection
+    const disableSelection = isWaitingMode?.value === true;
+    fabricCanvas.value.selection = !disableSelection;
   };
 
   const handleMouseMove = (opt: any) => {
@@ -52,7 +62,6 @@ export function useCanvasPan(fabricCanvas: Ref<any>) {
     }
 
     isPanning = false;
-    fabricCanvas.value.selection = true;
     fabricCanvas.value.defaultCursor = "default";
 
     // 延迟重置 isRightMouseDown，确保 contextmenu 事件能被正确阻止
@@ -87,6 +96,7 @@ export function useCanvasPan(fabricCanvas: Ref<any>) {
       isRightMouseDown = true;
       lastPanPoint = { x: e.clientX, y: e.clientY };
       fabricCanvas.value.defaultCursor = "move";
+      // 仅在拖拽时临时关闭 selection，防止出现框选高亮
       fabricCanvas.value.selection = false;
       e.preventDefault();
       e.stopPropagation();
@@ -132,7 +142,6 @@ export function useCanvasPan(fabricCanvas: Ref<any>) {
       );
 
       isPanning = false;
-      fabricCanvas.value.selection = true;
       fabricCanvas.value.defaultCursor = "default";
 
       // 延迟重置 isRightMouseDown

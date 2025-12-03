@@ -51,15 +51,17 @@ const {
   clearOcrResults,
 } = useCanvas(canvasDom, container);
 
-useCanvasPan(fabricCanvas);
-const { zoomLevel } = useCanvasZoom(fabricCanvas);
 const {
   setupDrawing,
   setWaitingMode,
   removeWaitingRect,
   clearAllWaitingRects,
   canvasToImageCoords,
+  isWaitingMode,
 } = useCanvasDrawing(fabricCanvas, imageRect);
+
+useCanvasPan(fabricCanvas, isWaitingMode);
+const { zoomLevel } = useCanvasZoom(fabricCanvas);
 
 watch([() => container.value], () => {
   if (container.value) {
