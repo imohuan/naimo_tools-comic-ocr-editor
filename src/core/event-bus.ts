@@ -8,8 +8,10 @@ export type CanvasEvents = {
   "canvas:clear": void;
 };
 
+export type SidebarTab = "images" | "text";
+
 export type UiEvents = {
-  "ui:image-list-toggle": void;
+  "ui:sidebar-switch": SidebarTab;
 };
 
 export const canvasEventBus = mitt<CanvasEvents>();

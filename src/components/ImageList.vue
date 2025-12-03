@@ -5,8 +5,10 @@
   >
     <!-- 折叠按钮 -->
     <div
-      class="flex items-center p-2 border-b border-gray-200"
-      :class="isCollapsed ? 'justify-center' : 'justify-between'"
+      class="flex p-2 border-b border-gray-200 gap-2"
+      :class="
+        isCollapsed ? 'flex-col items-center' : 'items-center justify-between'
+      "
     >
       <span v-if="!isCollapsed" class="text-sm font-medium text-gray-700 ml-2"
         >图片列表</span
@@ -156,28 +158,25 @@
 </template>
 
 <script setup lang="ts">
-import { ref, onMounted, onUnmounted, computed } from "vue";
-import { uiEventBus } from "../core/event-bus";
+import { ref, computed, toRefs } from "vue";
 import { useOcrStore } from "../stores/ocrStore";
 
 const store = useOcrStore();
+const props = defineProps<{
+  isCollapsed: boolean;
+}>();
+const emit = defineEmits<{
+  (e: "toggle-collapse"): void;
+}>();
+const { isCollapsed } = toRefs(props);
 
 const uploadArea = ref<HTMLDivElement>();
 const fileInput = ref<HTMLInputElement>();
 const isDragOver = ref(false);
-const isCollapsed = ref(false);
 
 const toggleCollapse = () => {
-  isCollapsed.value = !isCollapsed.value;
+  emit("toggle-collapse");
 };
-
-onMounted(() => {
-  uiEventBus.on("ui:image-list-toggle", toggleCollapse);
-});
-
-onUnmounted(() => {
-  uiEventBus.off("ui:image-list-toggle", toggleCollapse);
-});
 
 const handleUploadClick = () => {
   fileInput.value?.click();

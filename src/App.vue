@@ -8,8 +8,19 @@
           :active-tab="activeSidebarTab"
           @change="handleSidebarTabChange"
         />
-        <ImageList v-if="activeSidebarTab === 'images'" />
-        <TextResultList v-else :voice-role-options="voiceRoleOptions" />
+        <ImageList
+          v-if="activeSidebarTab === 'images'"
+          :is-collapsed="isSidebarCollapsed"
+          @toggle-collapse="toggleSidebarCollapse"
+        />
+        <TextResultList
+          v-else
+          :voice-role-options="voiceRoleOptions"
+          :is-collapsed="isSidebarCollapsed"
+          :width="textSidebarWidth"
+          @toggle-collapse="toggleSidebarCollapse"
+          @resize-width="(w: number) => (textSidebarWidth = w)"
+        />
       </div>
 
       <!-- 中间画布区域 -->
@@ -74,7 +85,7 @@ import BottomToolbar from "./components/BottomToolbar.vue";
 import SidebarTabs from "./components/SidebarTabs.vue";
 import { useOcr } from "./composables/useOcr.js";
 import { canvasEventBus, uiEventBus } from "./core/event-bus";
-import type { OcrTextResult, OcrTextDetail } from "./types/index";
+import type { OcrTextResult } from "./types/index";
 
 const themeOverrides = {
   common: {
@@ -91,6 +102,8 @@ const ocrStore = useOcrStore();
 const ocrLoading = computed(() => ocrStore.ocrLoading);
 const zoomLevel = ref(1);
 const isWaitingMode = ref(false);
+const isSidebarCollapsed = ref(false);
+const textSidebarWidth = ref(260);
 const sidebarTabs: Array<{ key: SidebarTab; label: string }> = [
   { key: "images", label: "图片" },
   { key: "text", label: "文本" },
@@ -179,6 +192,22 @@ const handleToggleWaitingMode = (enabled: boolean) => {
 
 const handleSidebarTabChange = (tab: SidebarTab) => {
   activeSidebarTab.value = tab;
+};
+
+const toggleSidebarCollapse = () => {
+  isSidebarCollapsed.value = !isSidebarCollapsed.value;
+};
+
+const shouldIgnoreShortcut = (event: KeyboardEvent) => {
+  const target = event.target as HTMLElement | null;
+  if (!target) return false;
+  const tagName = target.tagName;
+  return (
+    target.isContentEditable ||
+    tagName === "INPUT" ||
+    tagName === "TEXTAREA" ||
+    tagName === "SELECT"
+  );
 };
 
 // 裁剪图片
@@ -362,6 +391,7 @@ const updateZoom = (event: { level: number }) => {
 
 onMounted(() => {
   canvasEventBus.on("canvas:zoom", updateZoom);
+  uiEventBus.on("ui:sidebar-switch", handleSidebarTabChange);
   // 初始化时执行重置缩放，确保居中计算正确
   nextTick(() => {
     setTimeout(() => {
@@ -372,13 +402,31 @@ onMounted(() => {
 
 onUnmounted(() => {
   canvasEventBus.off("canvas:zoom", updateZoom);
+  uiEventBus.off("ui:sidebar-switch", handleSidebarTabChange);
 });
 
 useEventListener(window, "keydown", (event: KeyboardEvent) => {
-  if (event.key !== "Tab") return;
-  event.preventDefault();
-  event.stopPropagation();
-  uiEventBus.emit("ui:image-list-toggle");
+  if (event.repeat || shouldIgnoreShortcut(event)) return;
+
+  if (event.key === "Tab") {
+    event.preventDefault();
+    event.stopPropagation();
+    toggleSidebarCollapse();
+    return;
+  }
+
+  if (event.key === "1") {
+    event.preventDefault();
+    event.stopPropagation();
+    handleSidebarTabChange("images");
+    return;
+  }
+
+  if (event.key === "2") {
+    event.preventDefault();
+    event.stopPropagation();
+    handleSidebarTabChange("text");
+  }
 });
 </script>
 

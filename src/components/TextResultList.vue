@@ -1,12 +1,15 @@
 <template>
   <div
-    class="h-full flex flex-col bg-white border-r border-gray-200 transition-all duration-300"
-    :class="isCollapsed ? 'w-[60px]' : 'w-[260px]'"
+    v-show="!isCollapsed"
+    class="relative h-full flex flex-col bg-white border-r border-gray-200"
+    :style="{ width: `${width}px` }"
   >
-    <!-- 折叠按钮 -->
+    <!-- 顶部工具栏 -->
     <div
-      class="flex items-center p-2 border-b border-gray-200"
-      :class="isCollapsed ? 'justify-center' : 'justify-between'"
+      class="flex p-2 border-b border-gray-200 gap-2"
+      :class="
+        isCollapsed ? 'flex-col items-center' : 'items-center justify-between'
+      "
     >
       <span v-if="!isCollapsed" class="text-sm font-medium text-gray-700 ml-2"
         >文本结果</span
@@ -46,8 +49,7 @@
 
     <!-- 文本列表 -->
     <div
-      class="flex-1 overflow-y-auto px-2 py-2 space-y-2 scrollbar-thin scrollbar-thumb-gray-400 scrollbar-track-gray-100"
-      :class="isCollapsed ? 'pr-1' : 'pr-3'"
+      class="flex-1 overflow-y-auto px-2 py-2 pr-3 space-y-2 scrollbar-thin scrollbar-thumb-gray-400 scrollbar-track-gray-100"
     >
       <VueDraggable
         v-if="detailsSource.length > 0"
@@ -76,11 +78,17 @@
         暂无 OCR 结果
       </div>
     </div>
+
+    <!-- 右侧拖拽条 -->
+    <div
+      class="absolute top-0 right-0 h-full w-1 cursor-col-resize bg-transparent hover:bg-blue-400/20 transition-colors"
+      @mousedown.prevent="onResizeMouseDown"
+    ></div>
   </div>
 </template>
 
 <script setup lang="ts">
-import { computed, ref, watch, nextTick } from "vue";
+import { computed, ref, watch, nextTick, toRefs, onBeforeUnmount } from "vue";
 import { VueDraggable } from "vue-draggable-plus";
 import { NButton } from "naive-ui";
 import type { OcrTextDetail } from "../types";
@@ -90,16 +98,58 @@ import { useArrayHistory } from "../composables/useArrayHistory";
 
 interface Props {
   voiceRoleOptions: Array<{ label: string; value: string }>;
+  isCollapsed: boolean;
+  width: number;
 }
 
-defineProps<Props>();
+const props = defineProps<Props>();
+const emit = defineEmits<{
+  (e: "toggle-collapse"): void;
+  (e: "resize-width", value: number): void;
+}>();
+const { isCollapsed, width } = toRefs(props);
 
 const ocrStore = useOcrStore();
 
-const isCollapsed = ref(false);
+const isResizing = ref(false);
+const resizeStartX = ref(0);
+const resizeStartWidth = ref(0);
+const MIN_WIDTH = 200;
+const MAX_WIDTH = 480;
+
 const toggleCollapse = () => {
-  isCollapsed.value = !isCollapsed.value;
+  emit("toggle-collapse");
 };
+
+const onResizeMouseDown = (event: MouseEvent) => {
+  if (isCollapsed.value) return;
+  isResizing.value = true;
+  resizeStartX.value = event.clientX;
+  resizeStartWidth.value = width.value;
+  window.addEventListener("mousemove", onResizeMouseMove);
+  window.addEventListener("mouseup", onResizeMouseUp);
+};
+
+const onResizeMouseMove = (event: MouseEvent) => {
+  if (!isResizing.value) return;
+  const delta = event.clientX - resizeStartX.value;
+  let next = resizeStartWidth.value + delta;
+  if (next < MIN_WIDTH) next = MIN_WIDTH;
+  if (next > MAX_WIDTH) next = MAX_WIDTH;
+  emit("resize-width", next);
+};
+
+const onResizeMouseUp = () => {
+  if (!isResizing.value) return;
+  isResizing.value = false;
+  window.removeEventListener("mousemove", onResizeMouseMove);
+  window.removeEventListener("mouseup", onResizeMouseUp);
+};
+
+onBeforeUnmount(() => {
+  window.removeEventListener("mousemove", onResizeMouseMove);
+  window.removeEventListener("mouseup", onResizeMouseUp);
+});
 
 const details = computed(() => ocrStore.currentDetails);
 
