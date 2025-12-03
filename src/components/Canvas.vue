@@ -5,12 +5,13 @@
 </template>
 
 <script setup lang="ts">
-import { ref, watch, onMounted } from "vue";
+import { ref, watch, onMounted, nextTick } from "vue";
 import type { OcrTextResult } from "../types";
 import { useCanvas } from "../composables/useCanvas";
 import { useCanvasPan } from "../composables/useCanvasPan";
 import { useCanvasZoom } from "../composables/useCanvasZoom";
 import { useCanvasDrawing } from "../composables/useCanvasDrawing";
+import { canvasEventBus } from "../core/event-bus";
 
 interface Props {
   image?: File | string;
@@ -63,6 +64,30 @@ const {
 useCanvasPan(fabricCanvas, isWaitingMode);
 const { zoomLevel } = useCanvasZoom(fabricCanvas);
 
+// 统一的图片 + OCR 加载逻辑，并在最后触发重置事件
+const loadImageWithOcr = async (
+  image?: File | string,
+  ocrResult?: OcrTextResult | null
+) => {
+  if (!image) {
+    // 没有图片时清空画布
+    clearCanvas();
+    return;
+  }
+
+  // 先加载图片（内部会清空画布并绘制图片）
+  await loadImage(image);
+
+  // 再绘制当前图片对应的 OCR 结果框，确保在图片之上
+  await nextTick();
+  if (ocrResult) {
+    loadOcrBoxes(ocrResult);
+  }
+
+  // 通过全局画布事件总线触发缩放重置（居中显示）
+  canvasEventBus.emit("canvas:zoom-reset");
+};
+
 watch([() => container.value], () => {
   if (container.value) {
     resizeCanvas();
@@ -71,10 +96,8 @@ watch([() => container.value], () => {
 
 watch(
   () => props.image,
-  (image) => {
-    if (image) {
-      loadImage(image);
-    }
+  async (image) => {
+    await loadImageWithOcr(image, props.ocrResult);
   }
 );
 
@@ -132,10 +155,8 @@ onMounted(() => {
   initCanvas();
   setupDrawing(handleWaitingRectComplete);
   if (props.image) {
-    loadImage(props.image);
-  }
-  if (props.ocrResult) {
-    loadOcrBoxes(props.ocrResult);
+    // 初始化时同样保证先绘制图片再绘制 OCR 框，并在最后重置视图
+    loadImageWithOcr(props.image, props.ocrResult ?? null);
   }
   setWaitingMode(props.waitingMode);
 });

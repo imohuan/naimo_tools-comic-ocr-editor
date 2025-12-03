@@ -106,20 +106,17 @@
       <div
         v-for="(image, index) in images"
         :key="index"
-        class="image-item relative border-2 border-gray-200 rounded-lg overflow-hidden cursor-pointer transition-all duration-200 group"
+        class="image-item relative border-2 rounded-lg overflow-hidden cursor-pointer transition-all duration-200 group"
         :class="[
           isCollapsed
             ? 'hover:scale-105'
             : 'hover:scale-[1.02] hover:shadow-md',
-          {
-            'border-blue-600 shadow-[0_0_0_2px_#3b82f6]':
-              index === currentIndex,
-          },
+          index === currentIndex ? 'border-blue-600' : 'border-gray-200',
         ]"
         @click="selectImage(index)"
       >
         <div
-          class="w-full bg-contain bg-center bg-no-repeat bg-gray-100"
+          class="w-full bg-contain bg-center bg-no-repeat bg-gray-100 pointer-events-none"
           :class="isCollapsed ? 'aspect-square' : 'aspect-video'"
           :style="{
             backgroundImage: image.url ? `url(${image.url})` : 'none',
@@ -145,13 +142,171 @@
             <line x1="6" y1="6" x2="18" y2="18"></line>
           </svg>
         </button>
-        <!-- OCR状态指示 -->
+        <!-- OCR状态指示 / 加载中指示 -->
         <div
-          v-if="image.ocrResult"
+          v-if="image.ocrLoading"
+          class="absolute bottom-1 left-1 bg-white/90 text-gray-700 text-xs px-1.5 py-0.5 rounded flex items-center justify-center"
+        >
+          <svg
+            class="w-3 h-3 animate-spin"
+            viewBox="0 0 24 24"
+            fill="none"
+            stroke="currentColor"
+            stroke-width="2"
+          >
+            <circle
+              class="opacity-25"
+              cx="12"
+              cy="12"
+              r="10"
+              stroke="currentColor"
+            />
+            <path
+              class="opacity-75"
+              d="M4 12a8 8 0 018-8"
+              stroke="currentColor"
+            />
+          </svg>
+        </div>
+        <div
+          v-else-if="image.ocrResult"
           class="absolute bottom-1 left-1 bg-green-500 text-white text-xs px-1.5 py-0.5 rounded"
         >
           OCR
         </div>
+      </div>
+    </div>
+
+    <!-- 底部批量 OCR 工具栏 -->
+    <div
+      class="border-t border-gray-200 px-3 py-2 flex items-center justify-start text-xs"
+    >
+      <!-- 统一容器，保证左右高度/圆角一致，背景由父容器控制 -->
+      <div
+        class="w-full inline-flex items-stretch h-8 rounded-md overflow-hidden"
+        :class="
+          batchRunning
+            ? 'bg-red-500 text-white'
+            : !canBatchRun
+            ? 'bg-gray-300 text-gray-500'
+            : 'bg-blue-500 text-white'
+        "
+      >
+        <!-- 左侧执行区域 -->
+        <button
+          class="flex-1 flex items-center gap-1 px-3 text-xs font-medium"
+          :class="{
+            'cursor-pointer hover:bg-blue-600': canBatchRun && !batchRunning,
+            'cursor-pointer hover:bg-red-600': batchRunning,
+            'cursor-not-allowed opacity-60': !canBatchRun && !batchRunning,
+          }"
+          :disabled="!canBatchRun && !batchRunning"
+          @click="batchRunning ? handleStopBatchOcr() : handleStartBatchOcr()"
+          type="button"
+        >
+          <!-- 左侧图标：未运行时为播放图标，运行中为加载中的圆环 -->
+          <svg
+            v-if="!batchRunning"
+            class="w-3.5 h-3.5"
+            viewBox="0 0 24 24"
+            fill="currentColor"
+          >
+            <path d="M8 5v14l11-7z" />
+          </svg>
+          <svg
+            v-else
+            class="w-3.5 h-3.5 animate-spin"
+            viewBox="0 0 24 24"
+            fill="none"
+            stroke="currentColor"
+            stroke-width="2"
+          >
+            <circle
+              class="opacity-25"
+              cx="12"
+              cy="12"
+              r="10"
+              stroke="currentColor"
+            />
+            <path
+              class="opacity-75"
+              d="M4 12a8 8 0 018-8"
+              stroke="currentColor"
+            />
+          </svg>
+          <span>{{ batchRunning ? "停止" : "批量 OCR" }}</span>
+        </button>
+
+        <!-- 右侧触发区域：使用 Naive Popover 展示自定义内容 -->
+        <n-popover
+          trigger="click"
+          v-model:show="batchDropdownVisible"
+          placement="top-end"
+          :to="false"
+          :show-arrow="false"
+        >
+          <template #trigger>
+            <button
+              class="flex items-center justify-center px-2 text-xs border-l border-white/20"
+              :class="{
+                'cursor-pointer hover:bg-blue-600':
+                  !batchRunning && (canBatchRun || batchRunning),
+                'cursor-not-allowed opacity-60':
+                  batchRunning || (!canBatchRun && !batchRunning),
+              }"
+              :disabled="batchRunning || (!canBatchRun && !batchRunning)"
+              type="button"
+            >
+              <svg
+                class="w-3 h-3"
+                viewBox="0 0 24 24"
+                fill="none"
+                stroke="currentColor"
+                stroke-width="2"
+                stroke-linecap="round"
+                stroke-linejoin="round"
+              >
+                <polyline points="6 9 12 15 18 9" />
+              </svg>
+            </button>
+          </template>
+
+          <div class="px-3 py-2 text-xs text-gray-700 space-y-1 w-56">
+            <div class="font-medium mb-1">批量 OCR 模式</div>
+
+            <button
+              class="w-full flex items-center justify-between px-2 py-1 rounded hover:bg-gray-100 transition-colors"
+              :class="
+                batchMode === 'skipDone' ? 'bg-blue-50 text-blue-600' : ''
+              "
+              type="button"
+              @click="handleSelectBatchMode('skipDone')"
+            >
+              <span>仅未 OCR 图片</span>
+              <span
+                v-if="batchMode === 'skipDone'"
+                class="text-blue-500 text-[10px]"
+                >当前</span
+              >
+            </button>
+
+            <button
+              class="w-full flex items-center justify-between px-2 py-1 rounded hover:bg-gray-100 transition-colors"
+              :class="
+                batchMode === 'forceAll' ? 'bg-blue-50 text-blue-600' : ''
+              "
+              type="button"
+              @click="handleSelectBatchMode('forceAll')"
+            >
+              <span>强制所有图片 OCR</span>
+              <span
+                v-if="batchMode === 'forceAll'"
+                class="text-blue-500 text-[10px]"
+                >当前</span
+              >
+            </button>
+          </div>
+        </n-popover>
       </div>
     </div>
   </div>
@@ -159,6 +314,7 @@
 
 <script setup lang="ts">
 import { ref, computed, toRefs } from "vue";
+import { NPopover } from "naive-ui";
 import { useOcrStore } from "../stores/ocrStore";
 
 const store = useOcrStore();
@@ -217,6 +373,76 @@ const removeImage = (index: number) => {
 
 const images = computed(() => store.images);
 const currentIndex = computed(() => store.currentIndex);
+
+// 批量 OCR 模式：仅处理未 OCR / 强制全部 OCR
+const batchMode = ref<"skipDone" | "forceAll">("skipDone");
+// 是否正在批量执行
+const batchRunning = ref(false);
+// 下一个待处理的图片索引
+const nextBatchIndex = ref(0);
+
+// Popover 显隐
+const batchDropdownVisible = ref(false);
+
+// 选择批量 OCR 模式
+const handleSelectBatchMode = (key: "skipDone" | "forceAll") => {
+  batchMode.value = key;
+  batchDropdownVisible.value = false;
+};
+
+// 是否存在图片（用于控制按钮是否可用，仅在完全无图片时禁用）
+const canBatchRun = computed(() => {
+  return !!(images.value && images.value.length > 0);
+});
+
+// 内部：执行实际批量 OCR 逻辑（从 nextBatchIndex 开始，逐个执行）
+const runBatchOcrInternal = async () => {
+  const list = images.value || [];
+  if (list.length === 0) return;
+
+  batchRunning.value = true;
+
+  for (let i = nextBatchIndex.value; i < list.length; i++) {
+    nextBatchIndex.value = i;
+
+    const img = list[i];
+    // 只处理图片文件存在的项
+    if (!img || !img.file) {
+      continue;
+    }
+
+    // 普通模式：跳过已经有 OCR 结果的图片
+    if (batchMode.value === "skipDone" && img.ocrResult) {
+      continue;
+    }
+
+    // 如果在循环中被要求停止，则直接退出
+    if (!batchRunning.value) {
+      nextBatchIndex.value = i;
+      return;
+    }
+
+    // 逐张执行 OCR，结果总是以最新结果为准
+    await store.runOcrTask(img.id, img.file, (_prev, next) => next);
+  }
+
+  // 执行完成后重置状态
+  batchRunning.value = false;
+  nextBatchIndex.value = 0;
+};
+
+// 点击开始批量 OCR
+const handleStartBatchOcr = async () => {
+  if (!canBatchRun.value || batchRunning.value) return;
+  nextBatchIndex.value = 0;
+  await runBatchOcrInternal();
+};
+
+// 点击停止批量 OCR（当前图片请求结束后不再继续后续）
+const handleStopBatchOcr = () => {
+  if (!batchRunning.value) return;
+  batchRunning.value = false;
+};
 </script>
 
 <style scoped>

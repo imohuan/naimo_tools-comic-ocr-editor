@@ -49,6 +49,8 @@ export interface OcrTextResult {
 }
 
 export interface ImageItem {
+  // 每张图片的唯一标识，用于异步 OCR 结果与图片一一对应
+  id: string;
   file: File;
   url: string;
   ocrResult: OcrTextResult | null;

@@ -2,7 +2,7 @@
   <div
     v-show="!isCollapsed"
     class="relative h-full flex flex-col bg-white border-r border-gray-200"
-    :style="{ width: `${width}px` }"
+    :style="{ width: `${boundedWidth}px` }"
   >
     <!-- 顶部工具栏 -->
     <div
@@ -148,8 +148,15 @@ const { canUndoDetails, canRedoDetails } = storeToRefs(ocrStore);
 const isResizing = ref(false);
 const resizeStartX = ref(0);
 const resizeStartWidth = ref(0);
-const MIN_WIDTH = 200;
-const MAX_WIDTH = 480;
+const MIN_WIDTH = 300;
+const MAX_WIDTH = 500;
+
+// 约束实际宽度在最小 / 最大范围内
+const boundedWidth = computed(() => {
+  if (width.value < MIN_WIDTH) return MIN_WIDTH;
+  if (width.value > MAX_WIDTH) return MAX_WIDTH;
+  return width.value;
+});
 
 const toggleCollapse = () => {
   emit("toggle-collapse");
@@ -159,7 +166,8 @@ const onResizeMouseDown = (event: MouseEvent) => {
   if (isCollapsed.value) return;
   isResizing.value = true;
   resizeStartX.value = event.clientX;
-  resizeStartWidth.value = width.value;
+  // 使用受约束后的宽度作为起始值，避免初始就超出范围
+  resizeStartWidth.value = boundedWidth.value;
   window.addEventListener("mousemove", onResizeMouseMove);
   window.addEventListener("mouseup", onResizeMouseUp);
 };

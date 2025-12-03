@@ -52,16 +52,8 @@ export function useCanvas(
     imageRect.value = await addImage(fabricCanvas.value, image);
   };
 
-  let isLoadingOcrBoxes = false;
   const loadOcrBoxes = (ocrResult: OcrTextResult | null) => {
     if (!fabricCanvas.value || !ocrResult) return;
-
-    // 防止重复调用
-    if (isLoadingOcrBoxes) {
-      return;
-    }
-
-    isLoadingOcrBoxes = true;
 
     try {
       // 清除现有的OCR框（使用相同的清除逻辑）
@@ -87,11 +79,6 @@ export function useCanvas(
       }
     } catch (error) {
       console.error("加载OCR框时出错:", error);
-    } finally {
-      // 使用 nextTick 确保在渲染完成后重置标志
-      setTimeout(() => {
-        isLoadingOcrBoxes = false;
-      }, 0);
     }
   };
 
