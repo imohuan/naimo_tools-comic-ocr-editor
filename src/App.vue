@@ -1,31 +1,24 @@
 <template>
   <n-config-provider :theme-overrides="themeOverrides">
     <div class="flex h-screen overflow-hidden bg-gray-50">
-      <!-- 左侧菜单切换 -->
+      <!-- 左侧图片 / 文本双侧列表 -->
       <div class="flex h-full bg-white">
-        <SidebarTabs
-          :tabs="sidebarTabs"
-          :active-tab="activeSidebarTab"
-          @change="handleSidebarTabChange"
-        />
         <ImageList
-          v-if="activeSidebarTab === 'images'"
-          :is-collapsed="isSidebarCollapsed"
-          @toggle-collapse="toggleSidebarCollapse"
+          :is-collapsed="isImageListCollapsed"
+          @toggle-collapse="toggleImageListCollapse"
         />
         <TextResultList
-          v-else
           :voice-role-options="voiceRoleOptions"
-          :is-collapsed="isSidebarCollapsed"
+          :is-collapsed="isTextSidebarCollapsed"
           :width="textSidebarWidth"
-          @toggle-collapse="toggleSidebarCollapse"
+          @toggle-collapse="toggleTextSidebarCollapse"
           @resize-width="(w: number) => (textSidebarWidth = w)"
         />
       </div>
 
       <!-- 中间画布区域 -->
       <div class="flex-1 flex flex-col relative bg-gray-50 w-full">
-        <!-- 画布 -->
+        <!-- 画布 + 底部控制栏（在画布容器内部居中） -->
         <div class="flex-1 relative overflow-hidden">
           <Canvas
             ref="canvasRef"
@@ -37,26 +30,26 @@
             @delete-detail="handleDeleteDetail"
             @re-ocr-detail="handleReOcrDetail"
           />
-        </div>
 
-        <!-- 底部控制栏 -->
-        <BottomToolbar
-          :current-page="
-            ocrStore.images.length > 0 ? ocrStore.currentIndex + 1 : 0
-          "
-          :total-pages="ocrStore.images.length"
-          :display-zoom="displayZoom"
-          :has-image="!!currentImage"
-          :ocr-loading="ocrLoading"
-          :waiting-mode="isWaitingMode"
-          @zoom-in="handleZoomIn"
-          @zoom-out="handleZoomOut"
-          @zoom-reset="handleZoomReset"
-          @ocr="handleOcr"
-          @clear-ocr="handleClearCanvas"
-          @settings="showSettings = true"
-          @toggle-waiting-mode="handleToggleWaitingMode"
-        />
+          <!-- 底部控制栏：相对于画布区域绝对定位并水平居中 -->
+          <BottomToolbar
+            :current-page="
+              ocrStore.images.length > 0 ? ocrStore.currentIndex + 1 : 0
+            "
+            :total-pages="ocrStore.images.length"
+            :display-zoom="displayZoom"
+            :has-image="!!currentImage"
+            :ocr-loading="ocrLoading"
+            :waiting-mode="isWaitingMode"
+            @zoom-in="handleZoomIn"
+            @zoom-out="handleZoomOut"
+            @zoom-reset="handleZoomReset"
+            @ocr="handleOcr"
+            @clear-ocr="handleClearCanvas"
+            @settings="showSettings = true"
+            @toggle-waiting-mode="handleToggleWaitingMode"
+          />
+        </div>
       </div>
     </div>
 
@@ -82,8 +75,7 @@ import ImageList from "./components/ImageList.vue";
 import TextResultList from "./components/TextResultList.vue";
 import SettingsPanel from "./components/SettingsPanel.vue";
 import BottomToolbar from "./components/BottomToolbar.vue";
-import SidebarTabs from "./components/SidebarTabs.vue";
-import { canvasEventBus, uiEventBus } from "./core/event-bus";
+import { canvasEventBus } from "./core/event-bus";
 import type { OcrTextResult } from "./types/index";
 import { useEdgeTts } from "./composables/useEdgeTts";
 
@@ -94,21 +86,17 @@ const themeOverrides = {
   },
 };
 
-type SidebarTab = "images" | "text";
-
 const canvasRef = ref<InstanceType<typeof Canvas>>();
 const showSettings = ref(false);
 const ocrStore = useOcrStore();
 const ocrLoading = computed(() => ocrStore.ocrLoading);
 const zoomLevel = ref(1);
 const isWaitingMode = ref(false);
-const isSidebarCollapsed = ref(false);
+// 左侧图片列表折叠状态
+const isImageListCollapsed = ref(false);
+// 右侧文本结果折叠状态
+const isTextSidebarCollapsed = ref(false);
 const textSidebarWidth = ref(260);
-const sidebarTabs: Array<{ key: SidebarTab; label: string }> = [
-  { key: "images", label: "图片" },
-  { key: "text", label: "文本" },
-];
-const activeSidebarTab = ref<SidebarTab>("images");
 // 使用 Edge TTS Hook 提供的播音人列表
 const { voiceRoleOptions, loadVoiceRoleOptions } = useEdgeTts();
 
@@ -175,28 +163,12 @@ const handleToggleWaitingMode = (enabled: boolean) => {
   isWaitingMode.value = enabled;
 };
 
-const handleSidebarTabChange = (tab: SidebarTab) => {
-  activeSidebarTab.value = tab;
+const toggleImageListCollapse = () => {
+  isImageListCollapsed.value = !isImageListCollapsed.value;
 };
 
-const toggleSidebarCollapse = () => {
-  isSidebarCollapsed.value = !isSidebarCollapsed.value;
-};
-
-const ensureTextSidebarActive = () => {
-  if (activeSidebarTab.value !== "text") {
-    handleSidebarTabChange("text");
-  }
-};
-
-const triggerUndo = () => {
-  ensureTextSidebarActive();
-  ocrStore.undoDetails();
-};
-
-const triggerRedo = () => {
-  ensureTextSidebarActive();
-  ocrStore.redoDetails();
+const toggleTextSidebarCollapse = () => {
+  isTextSidebarCollapsed.value = !isTextSidebarCollapsed.value;
 };
 
 const shouldIgnoreShortcut = (event: KeyboardEvent) => {
@@ -406,7 +378,6 @@ const updateZoom = (event: { level: number }) => {
 
 onMounted(() => {
   canvasEventBus.on("canvas:zoom", updateZoom);
-  uiEventBus.on("ui:sidebar-switch", handleSidebarTabChange);
   // 加载播音人列表
   loadVoiceRoleOptions();
   // 初始化时执行重置缩放，确保居中计算正确
@@ -419,7 +390,6 @@ onMounted(() => {
 
 onUnmounted(() => {
   canvasEventBus.off("canvas:zoom", updateZoom);
-  uiEventBus.off("ui:sidebar-switch", handleSidebarTabChange);
 });
 
 useEventListener(window, "keydown", (event: KeyboardEvent) => {
@@ -431,13 +401,13 @@ useEventListener(window, "keydown", (event: KeyboardEvent) => {
     if (key === "z") {
       event.preventDefault();
       event.stopPropagation();
-      triggerUndo();
+      ocrStore.undoDetails();
       return;
     }
     if (key === "y") {
       event.preventDefault();
       event.stopPropagation();
-      triggerRedo();
+      ocrStore.redoDetails();
       return;
     }
   }
@@ -445,21 +415,8 @@ useEventListener(window, "keydown", (event: KeyboardEvent) => {
   if (event.key === "Tab") {
     event.preventDefault();
     event.stopPropagation();
-    toggleSidebarCollapse();
+    toggleTextSidebarCollapse();
     return;
-  }
-
-  if (event.key === "1") {
-    event.preventDefault();
-    event.stopPropagation();
-    handleSidebarTabChange("images");
-    return;
-  }
-
-  if (event.key === "2") {
-    event.preventDefault();
-    event.stopPropagation();
-    handleSidebarTabChange("text");
   }
 });
 </script>

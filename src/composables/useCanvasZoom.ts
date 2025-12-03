@@ -2,8 +2,12 @@ import { ref, watch, onUnmounted, type Ref } from "vue";
 import { clamp } from "lodash-es";
 import * as fabric from "fabric";
 import { canvasEventBus } from "../core/event-bus";
+import type { ImageRect } from "../core/canvas-utils";
 
-export function useCanvasZoom(fabricCanvas: Ref<any>) {
+export function useCanvasZoom(
+  fabricCanvas: Ref<any>,
+  imageRect?: Ref<ImageRect>
+) {
   const zoomLevel = ref(1);
   const minZoom = 0.1;
   const maxZoom = 20;
@@ -57,52 +61,64 @@ export function useCanvasZoom(fabricCanvas: Ref<any>) {
     if (!fabricCanvas.value) return;
 
     try {
-      // 重置 viewportTransform 到初始状态（单位矩阵，无平移无缩放）
-      fabricCanvas.value.setViewportTransform([1, 0, 0, 1, 0, 0]);
+      const canvas = fabricCanvas.value;
+      const rect = imageRect?.value;
 
-      // 将缩放级别设置为 1
-      zoomLevel.value = 1;
+      const canvasWidth = canvas.getWidth();
+      const canvasHeight = canvas.getHeight();
 
-      // 查找画布中的图片对象，重新计算位置使其居中
-      const objects = fabricCanvas.value.getObjects();
-      const imageObject = objects.find((obj: any) => obj.type === "image");
+      // 与图片加载时的布局约定保持一致：底部有工具栏，上下有 padding
+      const toolbarHeight = 55 + 15; // 底部工具栏高度
+      const paddingX = 40; // 左右内边距
+      const paddingTop = 20; // 顶部内边距
+      const paddingBottom = 20; // 底部（工具栏上方）内边距
 
-      if (imageObject) {
-        const canvasWidth = fabricCanvas.value.getWidth();
-        const canvasHeight = fabricCanvas.value.getHeight() - 55;
+      // 可用于显示图片的有效高度：减去工具栏和上下 padding
+      const availableWidth = Math.max(canvasWidth - paddingX * 2, 0);
+      const availableHeight = Math.max(
+        canvasHeight - toolbarHeight - paddingTop - paddingBottom,
+        0
+      );
 
-        // 获取图片的原始尺寸
-        const imgWidth = imageObject.width as number;
-        const imgHeight = imageObject.height as number;
+      // 如果没有图片信息，则退化为简单重置视口
+      if (!rect || !rect.w || !rect.h || !availableWidth || !availableHeight) {
+        canvas.setViewportTransform([1, 0, 0, 1, 0, 0]);
+        zoomLevel.value = 1;
+      } else {
+        const { x, y, w, h } = rect;
 
-        // 计算使图片居中最大显示的缩放比例
-        // 直接使用画布尺寸，因为画布尺寸已经考虑了容器布局
-        const scaleX = canvasWidth / imgWidth;
-        const scaleY = canvasHeight / imgHeight;
-        const scale = Math.min(scaleX, scaleY, 1);
+        // 计算在「黄色框有效区域」内，使图片完整显示并尽量铺满的缩放比例
+        const scaleX = availableWidth / w;
+        const scaleY = availableHeight / h;
+        const fitScale = clamp(Math.min(scaleX, scaleY), minZoom, maxZoom);
 
-        // 更新图片的缩放
-        imageObject.set({ scaleX: scale, scaleY: scale });
+        // 计算缩放后，为了在有效区域内居中显示所需要的平移偏移量
+        const displayWidth = w * fitScale;
+        const displayHeight = h * fitScale;
+        const targetLeft = paddingX + (availableWidth - displayWidth) / 2;
+        const targetTop = paddingTop + (availableHeight - displayHeight) / 2;
 
-        // 计算居中位置
-        const imageWidth = imgWidth * scale;
-        const imageHeight = imgHeight * scale;
-        const left = (canvasWidth - imageWidth) / 2;
-        const top = (canvasHeight - imageHeight) / 2;
+        const offsetX = targetLeft - x * fitScale;
+        const offsetY = targetTop - y * fitScale;
 
-        // 更新图片位置
-        imageObject.set({ left, top });
+        const viewportTransform: fabric.TMat2D = [
+          fitScale,
+          0,
+          0,
+          fitScale,
+          offsetX,
+          offsetY,
+        ];
 
-        // 确保图片不可选择和锁定
-        imageObject.set({ selectable: false });
-        imageObject.set({ lock: true } as any);
+        canvas.setViewportTransform(viewportTransform);
+        zoomLevel.value = fitScale;
       }
 
       // 触发渲染
-      fabricCanvas.value.requestRenderAll();
+      canvas.requestRenderAll();
 
       // 发送缩放事件
-      canvasEventBus.emit("canvas:zoom", { level: 1 });
+      canvasEventBus.emit("canvas:zoom", { level: zoomLevel.value });
     } catch (error) {
       console.error("重置画布时出错:", error);
     }

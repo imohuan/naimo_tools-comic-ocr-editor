@@ -62,7 +62,7 @@ const {
 } = useCanvasDrawing(fabricCanvas, imageRect);
 
 useCanvasPan(fabricCanvas, isWaitingMode);
-const { zoomLevel } = useCanvasZoom(fabricCanvas);
+const { zoomLevel } = useCanvasZoom(fabricCanvas, imageRect);
 
 // 统一的图片 + OCR 加载逻辑，并在最后触发重置事件
 const loadImageWithOcr = async (

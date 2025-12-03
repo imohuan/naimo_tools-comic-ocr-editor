@@ -14,7 +14,7 @@
         >图片列表</span
       >
       <button
-        class="w-8 h-8 flex items-center justify-center bg-gray-100 rounded-lg cursor-pointer transition-all hover:bg-gray-200"
+        class="w-8 h-8 flex items-center justify-center bg-gray-100 rounded-lg cursor-pointer transition-all hover:bg-gray-200 outline-none"
         @click="toggleCollapse"
         :title="isCollapsed ? '展开' : '折叠'"
       >
@@ -70,7 +70,7 @@
     <!-- 折叠状态下的上传按钮 -->
     <div v-else class="p-2 border-b border-gray-200">
       <button
-        class="w-full aspect-square flex items-center justify-center bg-blue-500 rounded-lg cursor-pointer transition-all hover:bg-blue-600"
+        class="w-full aspect-square flex items-center justify-center bg-blue-500 rounded-lg cursor-pointer transition-all hover:bg-blue-600 outline-none focus-visible:ring-2 focus-visible:ring-blue-500"
         @click="handleUploadClick"
         title="上传图片"
       >
@@ -181,8 +181,49 @@
     <div
       class="border-t border-gray-200 px-3 py-2 flex items-center justify-start text-xs"
     >
-      <!-- 统一容器，保证左右高度/圆角一致，背景由父容器控制 -->
+      <!-- 折叠状态：只显示一个小方形图标按钮，不显示文字和下拉 -->
+      <div v-if="isCollapsed" class="w-full flex justify-center">
+        <button
+          class="w-8 h-8 flex items-center justify-center rounded-md text-white bg-blue-500 hover:bg-blue-600 transition-colors disabled:opacity-60 disabled:cursor-not-allowed"
+          type="button"
+          :disabled="!canBatchRun && !batchRunning"
+          @click="batchRunning ? handleStopBatchOcr() : handleStartBatchOcr()"
+        >
+          <svg
+            v-if="!batchRunning"
+            class="w-3.5 h-3.5"
+            viewBox="0 0 24 24"
+            fill="currentColor"
+          >
+            <path d="M8 5v14l11-7z" />
+          </svg>
+          <svg
+            v-else
+            class="w-3.5 h-3.5 animate-spin"
+            viewBox="0 0 24 24"
+            fill="none"
+            stroke="currentColor"
+            stroke-width="2"
+          >
+            <circle
+              class="opacity-25"
+              cx="12"
+              cy="12"
+              r="10"
+              stroke="currentColor"
+            />
+            <path
+              class="opacity-75"
+              d="M4 12a8 8 0 0 1 8-8"
+              stroke="currentColor"
+            />
+          </svg>
+        </button>
+      </div>
+
+      <!-- 展开状态：完整按钮 + 模式下拉 -->
       <div
+        v-else
         class="w-full inline-flex items-stretch h-8 rounded-md overflow-hidden"
         :class="
           batchRunning

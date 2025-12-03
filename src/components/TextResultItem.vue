@@ -338,6 +338,10 @@ const handleGenerateAudio = async () => {
     });
   }
 };
+
+defineExpose({
+  generateAudio: () => handleGenerateAudio(),
+});
 </script>
 
 <style scoped></style>

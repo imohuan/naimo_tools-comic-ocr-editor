@@ -15,19 +15,21 @@
         >文本结果</span
       >
       <button
-        class="w-8 h-8 flex items-center justify-center bg-gray-100 rounded-lg cursor-pointer transition-all hover:bg-gray-200"
+        class="w-8 h-8 flex items-center justify-center bg-gray-100 rounded-lg cursor-pointer transition-all hover:bg-gray-200 outline-none"
         @click="toggleCollapse"
-        :title="isCollapsed ? '展开' : '折叠'"
+        title="关闭文本结果面板"
       >
         <svg
           viewBox="0 0 24 24"
           fill="none"
           stroke="currentColor"
           stroke-width="2"
-          class="w-5 h-5 text-gray-600 transition-transform duration-300"
-          :class="{ 'rotate-180': isCollapsed }"
+          stroke-linecap="round"
+          stroke-linejoin="round"
+          class="w-5 h-5 text-gray-600"
         >
-          <path d="M15 18l-6-6 6-6" />
+          <line x1="18" y1="6" x2="6" y2="18" />
+          <line x1="6" y1="6" x2="18" y2="18" />
         </svg>
       </button>
     </div>
@@ -82,35 +84,192 @@
     </div>
 
     <!-- 文本列表 -->
-    <div
-      class="flex-1 overflow-y-auto px-2 py-2 pr-3 space-y-2 scrollbar-thin scrollbar-thumb-gray-400 scrollbar-track-gray-100"
-    >
-      <VueDraggable
-        v-if="detailsSource.length > 0"
-        v-model="detailsSource"
-        :animation="150"
-        handle=".drag-handle"
-        item-key="__key"
-      >
-        <TextResultItem
-          v-for="(item, index) in detailsSource"
-          :key="item.__key"
-          :detail="item"
-          :index="index"
-          :voice-role-options="voiceRoleOptions"
-          @update-translated="handleChangeTranslated"
-          @update-origin="handleChangeOrigin"
-          @update-voice-role="handleChangeVoiceRole"
-          @delete-detail="handleDeleteDetail"
-          @update-audio-state="handleUpdateAudioState"
-        />
-      </VueDraggable>
-
+    <div class="flex-1 flex flex-col overflow-hidden">
       <div
-        v-else
-        class="h-full flex items-center justify-center text-xs text-gray-400"
+        class="h-full flex-1 overflow-y-auto px-2 py-2 pr-3 space-y-2 scrollbar-thin scrollbar-thumb-gray-400 scrollbar-track-gray-100"
       >
-        暂无 OCR 结果
+        <VueDraggable
+          v-if="detailsSource.length > 0"
+          v-model="detailsSource"
+          :animation="150"
+          handle=".drag-handle"
+          item-key="__key"
+        >
+          <TextResultItem
+            v-for="(item, index) in detailsSource"
+            :key="item.__key"
+            :detail="item"
+            :index="index"
+            ref="itemRefs"
+            :voice-role-options="voiceRoleOptions"
+            @update-translated="handleChangeTranslated"
+            @update-origin="handleChangeOrigin"
+            @update-voice-role="handleChangeVoiceRole"
+            @delete-detail="handleDeleteDetail"
+            @update-audio-state="handleUpdateAudioState"
+          />
+        </VueDraggable>
+
+        <div
+          v-else
+          class="h-full flex items-center justify-center text-xs text-gray-400"
+        >
+          暂无 OCR 结果
+        </div>
+      </div>
+
+      <!-- 底部批量音频生成工具栏 -->
+      <div
+        class="border-t border-gray-200 px-3 py-2 flex items-center justify-start text-xs"
+      >
+        <div
+          class="w-full inline-flex items-stretch h-8 rounded-md overflow-hidden"
+          :class="
+            batchRunning
+              ? 'bg-red-500 text-white'
+              : !canBatchRun
+              ? 'bg-gray-300 text-gray-500'
+              : 'bg-blue-500 text-white'
+          "
+        >
+          <!-- 左侧执行区域 -->
+          <button
+            class="flex-1 flex items-center gap-1 px-3 text-xs font-medium"
+            :class="{
+              'cursor-pointer hover:bg-blue-600': canBatchRun && !batchRunning,
+              'cursor-pointer hover:bg-red-600': batchRunning,
+              'cursor-not-allowed opacity-60': !canBatchRun && !batchRunning,
+            }"
+            :disabled="!canBatchRun && !batchRunning"
+            @click="
+              batchRunning ? handleStopBatchAudio() : handleStartBatchAudio()
+            "
+            type="button"
+          >
+            <!-- 图标：未运行时为播放图标，运行中为加载中的圆环 -->
+            <svg
+              v-if="!batchRunning"
+              class="w-3.5 h-3.5"
+              viewBox="0 0 24 24"
+              fill="currentColor"
+            >
+              <path d="M8 5v14l11-7z" />
+            </svg>
+            <svg
+              v-else
+              class="w-3.5 h-3.5 animate-spin"
+              viewBox="0 0 24 24"
+              fill="none"
+              stroke="currentColor"
+              stroke-width="2"
+            >
+              <circle
+                class="opacity-25"
+                cx="12"
+                cy="12"
+                r="10"
+                stroke="currentColor"
+              />
+              <path
+                class="opacity-75"
+                d="M4 12a8 8 0 0 1 8-8"
+                stroke="currentColor"
+              />
+            </svg>
+            <span>{{ batchRunning ? "停止" : "批量音频" }}</span>
+          </button>
+
+          <!-- 右侧批量模式下拉 -->
+          <n-popover
+            trigger="click"
+            v-model:show="batchDropdownVisible"
+            placement="top-end"
+            :to="false"
+            :show-arrow="false"
+          >
+            <template #trigger>
+              <button
+                class="flex items-center justify-center px-2 text-xs border-l border-white/20"
+                :class="{
+                  'cursor-pointer hover:bg-blue-600':
+                    !batchRunning && (canBatchRun || batchRunning),
+                  'cursor-not-allowed opacity-60':
+                    batchRunning || (!canBatchRun && !batchRunning),
+                }"
+                :disabled="batchRunning || (!canBatchRun && !batchRunning)"
+                type="button"
+              >
+                <svg
+                  class="w-3 h-3"
+                  viewBox="0 0 24 24"
+                  fill="none"
+                  stroke="currentColor"
+                  stroke-width="2"
+                  stroke-linecap="round"
+                  stroke-linejoin="round"
+                >
+                  <polyline points="6 9 12 15 18 9" />
+                </svg>
+              </button>
+            </template>
+
+            <div class="px-3 py-2 text-xs text-gray-700 space-y-1 w-56">
+              <div class="font-medium mb-1">批量音频生成设置</div>
+
+              <button
+                class="w-full flex items-center justify-between px-2 py-1 rounded hover:bg-gray-100 transition-colors"
+                :class="
+                  batchMode === 'skipDone' ? 'bg-blue-50 text-blue-600' : ''
+                "
+                type="button"
+                @click="handleSelectBatchMode('skipDone')"
+              >
+                <span>仅未生成音频</span>
+                <span
+                  v-if="batchMode === 'skipDone'"
+                  class="text-blue-500 text-[10px]"
+                  >当前</span
+                >
+              </button>
+
+              <button
+                class="w-full flex items-center justify-between px-2 py-1 rounded hover:bg-gray-100 transition-colors"
+                :class="
+                  batchMode === 'forceAll' ? 'bg-blue-50 text-blue-600' : ''
+                "
+                type="button"
+                @click="handleSelectBatchMode('forceAll')"
+              >
+                <span>强制所有文本生成</span>
+                <span
+                  v-if="batchMode === 'forceAll'"
+                  class="text-blue-500 text-[10px]"
+                  >当前</span
+                >
+              </button>
+
+              <div class="mt-2 pt-1 border-t border-dashed border-gray-200">
+                <div class="mb-1 text-[11px] text-gray-500">并发数量</div>
+                <div class="flex items-center gap-1">
+                  <button
+                    v-for="n in concurrencyOptions"
+                    :key="n"
+                    type="button"
+                    class="px-2 py-0.5 rounded text-[11px] border"
+                    :class="
+                      concurrency === n
+                        ? 'bg-blue-500 text-white border-blue-500'
+                        : 'bg-white text-gray-700 border-gray-300 hover:bg-gray-100'
+                    "
+                    @click="concurrency = n"
+                  >
+                    {{ n }}
+                  </button>
+                </div>
+              </div>
+            </div>
+          </n-popover>
+        </div>
       </div>
     </div>
 
@@ -129,6 +288,7 @@ import { storeToRefs } from "pinia";
 import type { OcrTextDetail } from "../types";
 import { useOcrStore } from "../stores/ocrStore";
 import TextResultItem from "./TextResultItem.vue";
+import { NPopover } from "naive-ui";
 
 interface Props {
   voiceRoleOptions: Array<{ label: string; value: string }>;
@@ -145,6 +305,9 @@ const { isCollapsed, width } = toRefs(props);
 
 const ocrStore = useOcrStore();
 const { canUndoDetails, canRedoDetails } = storeToRefs(ocrStore);
+
+type TextResultItemInstance = InstanceType<typeof TextResultItem> | null;
+const itemRefs = ref<TextResultItemInstance[]>([]);
 
 const isResizing = ref(false);
 const resizeStartX = ref(0);
@@ -302,6 +465,81 @@ const handleUpdateAudioState = (
     ...payload,
   };
   detailsSource.value = list;
+};
+
+// 批量音频生成：仅处理当前图片的文本结果
+const batchMode = ref<"skipDone" | "forceAll">("skipDone");
+const batchRunning = ref(false);
+const batchDropdownVisible = ref(false);
+// 并发控制
+const concurrencyOptions = [1, 2, 3, 5, 8];
+const concurrency = ref(2);
+
+// 是否存在文本（用于控制按钮是否可用）
+const canBatchRun = computed(() => {
+  return hasDetails.value;
+});
+
+const handleSelectBatchMode = (key: "skipDone" | "forceAll") => {
+  batchMode.value = key;
+  batchDropdownVisible.value = false;
+};
+
+// 内部执行批量音频生成逻辑（按并发数量调用子项的 generateAudio）
+const runBatchAudioInternal = async () => {
+  const list = detailsSource.value || [];
+  if (!list.length) return;
+
+  // 预先计算需要处理的索引
+  const indexes: number[] = [];
+  list.forEach((detail, idx) => {
+    if (!detail) return;
+    if (batchMode.value === "skipDone" && detail.audioUrl) {
+      return;
+    }
+    indexes.push(idx);
+  });
+
+  if (!indexes.length) return;
+
+  batchRunning.value = true;
+
+  let cursor = 0;
+  const workerCount = Math.max(1, Math.min(concurrency.value, indexes.length));
+
+  const worker = async () => {
+    while (cursor < indexes.length && batchRunning.value) {
+      const current = cursor++;
+      const idx = indexes[current];
+      const comp = itemRefs.value[idx];
+      if (comp && typeof comp.generateAudio === "function") {
+        try {
+          await comp.generateAudio();
+        } catch {
+          // 单条失败不影响整体批量任务，错误由子组件内部处理
+        }
+      }
+    }
+  };
+
+  const tasks: Promise<void>[] = [];
+  for (let i = 0; i < workerCount; i++) {
+    tasks.push(worker());
+  }
+
+  await Promise.all(tasks);
+
+  batchRunning.value = false;
+};
+
+const handleStartBatchAudio = async () => {
+  if (!canBatchRun.value || batchRunning.value) return;
+  await runBatchAudioInternal();
+};
+
+const handleStopBatchAudio = () => {
+  if (!batchRunning.value) return;
+  batchRunning.value = false;
 };
 
 const onUndo = () => ocrStore.undoDetails();
