@@ -3,6 +3,8 @@ import { ref, computed, watch, nextTick } from "vue";
 import type { ImageItem, OcrTextDetail, OcrTextResult } from "../types";
 import { useArrayHistory } from "../composables/useArrayHistory";
 import { useOcr } from "../composables/useOcr";
+import { getImageDimensions } from "../utils/image";
+import { normalizeOcrResult } from "../utils/ocr";
 
 // 全局 OCR / 图片状态管理
 export const useOcrStore = defineStore("ocr-store", () => {
@@ -134,11 +136,22 @@ export const useOcrStore = defineStore("ocr-store", () => {
     imageRef.ocrLoading = true;
 
     try {
-      const ocrResult = await requestOcr(file);
+      const [ocrResult, dimensions] = await Promise.all([
+        requestOcr(file),
+        getImageDimensions(file).catch((error) => {
+          console.error("读取图片尺寸失败:", error);
+          return null;
+        }),
+      ]);
+
+      const normalizedResult =
+        dimensions && dimensions.width > 0 && dimensions.height > 0
+          ? normalizeOcrResult(ocrResult, dimensions.width, dimensions.height)
+          : ocrResult;
 
       // 第二次查找：请求返回时再次确认图片仍然存在（中途可能被删除）
       const target = findImageById(imageId) || imageRef;
-      const merged = applyResult(target.ocrResult, ocrResult);
+      const merged = applyResult(target.ocrResult, normalizedResult);
       target.ocrResult = merged;
     } catch (error) {
       console.error("OCR 请求失败:", error);
