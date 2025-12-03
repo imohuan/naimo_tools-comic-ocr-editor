@@ -56,17 +56,60 @@ export function useOcr() {
                 const jsonText = decoder.decode(data);
                 const jsonData = JSON.parse(jsonText);
 
+                console.log({ jsonData });
+
                 // 转换 API 返回的数据格式：translations -> details
                 if (
                   jsonData.translations &&
                   Array.isArray(jsonData.translations)
                 ) {
+                  const targetLang = config?.translator?.target_lang;
+
+                  const pickText = (
+                    field: unknown,
+                    preferredLang?: string,
+                    excludedLang?: string
+                  ): string => {
+                    if (!field) return "";
+                    if (typeof field === "string") return field;
+                    if (typeof field === "object") {
+                      const obj = field as Record<string, unknown>;
+                      if (
+                        preferredLang &&
+                        typeof obj[preferredLang] === "string"
+                      ) {
+                        return obj[preferredLang] as string;
+                      }
+                      const first = Object.entries(obj).find(
+                        ([lang, val]) =>
+                          lang.toUpperCase?.() !== excludedLang &&
+                          typeof val === "string"
+                      );
+                      if (first && typeof first[1] === "string") {
+                        return first[1];
+                      }
+                      const anyVal = Object.values(obj).find(
+                        (val) => typeof val === "string"
+                      );
+                      if (typeof anyVal === "string") return anyVal;
+                      return JSON.stringify(obj);
+                    }
+                    return "";
+                  };
+
                   const result: OcrTextResult = {
                     details: jsonData.translations.map((trans: any) => {
-                      // 优先使用后端提供的原文/译文字段，如果没有则退化为同一字段
-                      const translatedText = trans.text || "";
+                      const translatedText = pickText(trans.text, targetLang);
+                      const originFromText = pickText(
+                        trans.text,
+                        undefined,
+                        targetLang
+                      );
                       const originText =
-                        trans.origin_text || trans.source || translatedText;
+                        trans.origin_text ||
+                        trans.source ||
+                        originFromText ||
+                        translatedText;
 
                       return {
                         text: translatedText,

@@ -10,23 +10,57 @@
               #{{ index + 1 }}
             </span>
           </div>
-          <div class="flex items-center space-x-1">
-            <n-select
-              v-model:value="localDetail.voiceRole"
-              size="tiny"
-              class="w-40"
-              :options="voiceRoleOptions"
-              placeholder="配音角色"
-              @update:value="(val) => emit('update-voice-role', index, val)"
-            />
-            <n-button
-              size="tiny"
-              quaternary
-              type="error"
+          <div class="flex items-center space-x-1.5">
+            <div class="w-28">
+              <n-select
+                v-model:value="localVoiceRole"
+                size="small"
+                :options="voiceRoleOptions"
+                placeholder="配音角色"
+                @update:value="handleUpdateVoiceRole"
+              />
+            </div>
+            <button
+              type="button"
+              class="w-8 h-8 p-0 rounded-md text-gray-500 hover:text-red-500 hover:bg-red-50 transition-colors flex items-center justify-center flex-shrink-0"
+              aria-label="删除文本"
               @click="emit('delete-detail', index)"
             >
-              删除
-            </n-button>
+              <svg
+                viewBox="0 0 24 24"
+                class="w-4 h-4"
+                fill="none"
+                stroke="currentColor"
+                stroke-width="1.8"
+              >
+                <path
+                  stroke-linecap="round"
+                  stroke-linejoin="round"
+                  d="M9 4h6m-8 4h10l-1 12H8L7 8zm3 3v6m4-6v6"
+                />
+              </svg>
+            </button>
+            <button
+              type="button"
+              class="w-8 h-8 p-0 rounded-md text-gray-500 hover:text-gray-700 hover:bg-gray-100 transition-colors flex items-center justify-center flex-shrink-0"
+              aria-label="折叠原文"
+              @click="toggleOrigin"
+            >
+              <svg
+                viewBox="0 0 24 24"
+                class="w-4 h-4 transition-transform duration-200"
+                :class="showOrigin ? 'rotate-180' : 'rotate-0'"
+                fill="none"
+                stroke="currentColor"
+                stroke-width="1.8"
+              >
+                <path
+                  stroke-linecap="round"
+                  stroke-linejoin="round"
+                  d="M6 9l6 6 6-6"
+                />
+              </svg>
+            </button>
           </div>
         </div>
       </template>
@@ -37,42 +71,33 @@
         :autosize="{ minRows: 2, maxRows: 4 }"
         v-model:value="localTranslatedText"
         placeholder="翻译后的内容"
-        @update:value="handleUpdateTranslated"
+        @blur="handleBlurTranslated"
+        @clear="handleClearTranslated"
         clearable
         show-count
       />
 
-      <!-- 折叠原始内容 -->
-      <n-collapse class="mt-2">
-        <n-collapse-item name="origin">
-          <template #header>
-            <span class="text-xs text-gray-500">原始内容</span>
-          </template>
-          <n-input
-            type="textarea"
-            :autosize="{ minRows: 2, maxRows: 6 }"
-            v-model:value="localOriginText"
-            placeholder="原始识别内容"
-            @update:value="handleUpdateOrigin"
-            clearable
-            show-count
-          />
-        </n-collapse-item>
-      </n-collapse>
+      <!-- 可折叠的原始内容 -->
+      <div v-if="showOrigin" class="mt-2">
+        <div class="mb-1 text-xs text-gray-500">原始内容</div>
+        <n-input
+          type="textarea"
+          :autosize="{ minRows: 2, maxRows: 6 }"
+          v-model:value="localOriginText"
+          placeholder="原始识别内容"
+          @blur="handleBlurOrigin"
+          @clear="handleClearOrigin"
+          clearable
+          show-count
+        />
+      </div>
     </n-card>
   </div>
 </template>
 
 <script setup lang="ts">
 import { ref, watch } from "vue";
-import {
-  NButton,
-  NCard,
-  NCollapse,
-  NCollapseItem,
-  NInput,
-  NSelect,
-} from "naive-ui";
+import { NCard, NInput, NSelect } from "naive-ui";
 import type { OcrTextDetail } from "../types";
 
 interface Props {
@@ -104,36 +129,62 @@ const normalizeText = (value: unknown): string => {
   return "";
 };
 
-// 本地副本：仅用于 voiceRole
-const localDetail = ref<OcrTextDetail>({ ...props.detail });
-
 // 单独维护用于输入框的本地字符串
-const localTranslatedText = ref(
-  normalizeText(props.detail.translatedText ?? props.detail.text)
-);
-const localOriginText = ref(
-  normalizeText(props.detail.originText ?? props.detail.text)
-);
+const localTranslatedText = ref("");
+const localOriginText = ref("");
+const localVoiceRole = ref("");
+const showOrigin = ref(false);
+
+const syncLocalFromDetail = () => {
+  localTranslatedText.value = normalizeText(
+    props.detail.translatedText ?? props.detail.text
+  );
+  localOriginText.value = normalizeText(
+    props.detail.originText ?? props.detail.text
+  );
+  localVoiceRole.value = props.detail.voiceRole ?? "";
+};
 
 // 当外部 detail 变化时同步本地
 watch(
-  () => props.detail,
-  (val) => {
-    localDetail.value = { ...val };
-    localTranslatedText.value = normalizeText(val.translatedText ?? val.text);
-    localOriginText.value = normalizeText(val.originText ?? val.text);
+  () => [
+    props.detail.text,
+    props.detail.translatedText,
+    props.detail.originText,
+    props.detail.voiceRole,
+  ],
+  () => {
+    syncLocalFromDetail();
   },
-  { deep: true }
+  { immediate: true }
 );
 
-const handleUpdateTranslated = (val: string) => {
-  localTranslatedText.value = val;
-  emit("update-translated", props.index, val);
+const handleBlurTranslated = () => {
+  emit("update-translated", props.index, localTranslatedText.value);
 };
 
-const handleUpdateOrigin = (val: string) => {
-  localOriginText.value = val;
-  emit("update-origin", props.index, val);
+const handleClearTranslated = () => {
+  localTranslatedText.value = "";
+  handleBlurTranslated();
+};
+
+const handleBlurOrigin = () => {
+  emit("update-origin", props.index, localOriginText.value);
+};
+
+const handleClearOrigin = () => {
+  localOriginText.value = "";
+  handleBlurOrigin();
+};
+
+const handleUpdateVoiceRole = (val: string | null) => {
+  const next = val ?? "";
+  localVoiceRole.value = next;
+  emit("update-voice-role", props.index, next);
+};
+
+const toggleOrigin = () => {
+  showOrigin.value = !showOrigin.value;
 };
 </script>
 

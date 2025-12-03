@@ -38,12 +38,46 @@
         <span class="flex-1">
           {{ hasDetails ? "当前图片 OCR 结果" : "暂无 OCR 结果" }}
         </span>
-        <n-button size="tiny" tertiary :disabled="!canUndo" @click="onUndo">
-          撤销
-        </n-button>
-        <n-button size="tiny" tertiary :disabled="!canRedo" @click="onRedo">
-          重做
-        </n-button>
+        <button
+          class="icon-button"
+          :class="{ disabled: !canUndo }"
+          :disabled="!canUndo"
+          @click="onUndo"
+          title="撤销 (Ctrl + Z)"
+        >
+          <svg
+            viewBox="0 0 24 24"
+            fill="none"
+            stroke="currentColor"
+            stroke-width="2"
+            stroke-linecap="round"
+            stroke-linejoin="round"
+            class="w-4 h-4"
+          >
+            <path d="M9 5L4 9l5 4" />
+            <path d="M20 19v-2a6 6 0 0 0-6-6H4" />
+          </svg>
+        </button>
+        <button
+          class="icon-button"
+          :class="{ disabled: !canRedo }"
+          :disabled="!canRedo"
+          @click="onRedo"
+          title="重做 (Ctrl + Y)"
+        >
+          <svg
+            viewBox="0 0 24 24"
+            fill="none"
+            stroke="currentColor"
+            stroke-width="2"
+            stroke-linecap="round"
+            stroke-linejoin="round"
+            class="w-4 h-4"
+          >
+            <path d="M15 5l5 4-5 4" />
+            <path d="M4 19v-2a6 6 0 0 1 6-6h10" />
+          </svg>
+        </button>
       </div>
     </div>
 
@@ -90,11 +124,10 @@
 <script setup lang="ts">
 import { computed, ref, watch, nextTick, toRefs, onBeforeUnmount } from "vue";
 import { VueDraggable } from "vue-draggable-plus";
-import { NButton } from "naive-ui";
+import { storeToRefs } from "pinia";
 import type { OcrTextDetail } from "../types";
 import { useOcrStore } from "../stores/ocrStore";
 import TextResultItem from "./TextResultItem.vue";
-import { useArrayHistory } from "../composables/useArrayHistory";
 
 interface Props {
   voiceRoleOptions: Array<{ label: string; value: string }>;
@@ -110,6 +143,7 @@ const emit = defineEmits<{
 const { isCollapsed, width } = toRefs(props);
 
 const ocrStore = useOcrStore();
+const { canUndoDetails, canRedoDetails } = storeToRefs(ocrStore);
 
 const isResizing = ref(false);
 const resizeStartX = ref(0);
@@ -177,12 +211,8 @@ watch(
   { immediate: true, deep: true }
 );
 
-// 历史记录：基于数组快照的撤销 / 重做
-const { undo, redo, canUndo, canRedo } = useArrayHistory(detailsSource, {
-  maxSize: 100,
-  debounce: 200,
-  ignoreRef: syncingFromStore,
-});
+const canUndo = canUndoDetails;
+const canRedo = canRedoDetails;
 
 const hasDetails = computed(
   () => detailsSource.value && detailsSource.value.length > 0
@@ -249,11 +279,39 @@ const handleDeleteDetail = (detailIndex: number) => {
   detailsSource.value = list;
 };
 
-const onUndo = () => undo();
-const onRedo = () => redo();
+const onUndo = () => ocrStore.undoDetails();
+const onRedo = () => ocrStore.redoDetails();
+
+defineExpose({
+  undo: onUndo,
+  redo: onRedo,
+});
 </script>
 
 <style scoped>
+.icon-button {
+  width: 28px;
+  height: 28px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 0.5rem;
+  border: 1px solid #e5e7eb;
+  background-color: #ffffff;
+  color: #4b5563;
+  transition: background-color 0.2s ease, color 0.2s ease;
+}
+
+.icon-button:hover:not(.disabled) {
+  background-color: #f3f4f6;
+  color: #1f2937;
+}
+
+.icon-button.disabled {
+  opacity: 0.4;
+  cursor: not-allowed;
+}
+
 .scrollbar-thin::-webkit-scrollbar {
   width: 6px;
 }

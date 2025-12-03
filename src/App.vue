@@ -198,6 +198,22 @@ const toggleSidebarCollapse = () => {
   isSidebarCollapsed.value = !isSidebarCollapsed.value;
 };
 
+const ensureTextSidebarActive = () => {
+  if (activeSidebarTab.value !== "text") {
+    handleSidebarTabChange("text");
+  }
+};
+
+const triggerUndo = () => {
+  ensureTextSidebarActive();
+  ocrStore.undoDetails();
+};
+
+const triggerRedo = () => {
+  ensureTextSidebarActive();
+  ocrStore.redoDetails();
+};
+
 const shouldIgnoreShortcut = (event: KeyboardEvent) => {
   const target = event.target as HTMLElement | null;
   if (!target) return false;
@@ -407,6 +423,23 @@ onUnmounted(() => {
 
 useEventListener(window, "keydown", (event: KeyboardEvent) => {
   if (event.repeat || shouldIgnoreShortcut(event)) return;
+
+  const isModifierPressed = event.ctrlKey || event.metaKey;
+  if (isModifierPressed) {
+    const key = event.key.toLowerCase();
+    if (key === "z") {
+      event.preventDefault();
+      event.stopPropagation();
+      triggerUndo();
+      return;
+    }
+    if (key === "y") {
+      event.preventDefault();
+      event.stopPropagation();
+      triggerRedo();
+      return;
+    }
+  }
 
   if (event.key === "Tab") {
     event.preventDefault();

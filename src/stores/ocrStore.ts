@@ -1,6 +1,7 @@
 import { defineStore } from "pinia";
-import { ref, computed } from "vue";
+import { ref, computed, watch, nextTick } from "vue";
 import type { ImageItem, OcrTextDetail, OcrTextResult } from "../types";
+import { useArrayHistory } from "../composables/useArrayHistory";
 
 // 全局 OCR / 图片状态管理
 export const useOcrStore = defineStore("ocr-store", () => {
@@ -108,6 +109,52 @@ export const useOcrStore = defineStore("ocr-store", () => {
     currentImage.value.ocrResult = null;
   };
 
+  const cloneDetails = (list: OcrTextDetail[] = []) =>
+    (list || []).map((item) => ({ ...item }));
+
+  const historySyncing = ref(false);
+  const historySource = ref<OcrTextDetail[]>([]);
+
+  watch(
+    currentDetails,
+    (val) => {
+      historySyncing.value = true;
+      historySource.value = cloneDetails(val);
+      nextTick(() => {
+        historySyncing.value = false;
+      });
+    },
+    { immediate: true, deep: true }
+  );
+
+  const {
+    undo: undoDetailsInternal,
+    redo: redoDetailsInternal,
+    canUndo: canUndoDetails,
+    canRedo: canRedoDetails,
+  } = useArrayHistory(historySource, {
+    maxSize: 100,
+    debounce: 200,
+    ignoreRef: historySyncing,
+  });
+
+  watch(
+    historySource,
+    (val) => {
+      if (historySyncing.value) return;
+      replaceCurrentDetails(cloneDetails(val));
+    },
+    { deep: false }
+  );
+
+  const undoDetails = () => {
+    undoDetailsInternal();
+  };
+
+  const redoDetails = () => {
+    redoDetailsInternal();
+  };
+
   return {
     images,
     currentIndex,
@@ -122,5 +169,9 @@ export const useOcrStore = defineStore("ocr-store", () => {
     replaceCurrentDetails,
     deleteCurrentDetail,
     clearCurrentOcrResult,
+    undoDetails,
+    redoDetails,
+    canUndoDetails,
+    canRedoDetails,
   };
 });
