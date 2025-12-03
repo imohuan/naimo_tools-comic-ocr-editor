@@ -51,7 +51,7 @@ const drawRoundedRectPath = (
 
 // Badge形状 - 用于显示OCR框编号
 export class Badge extends fabric.Rect {
-  static type = "Badge";
+  static type = "badge";
   declare text?: string | number;
 
   constructor(options?: Partial<RectProps>) {
@@ -101,7 +101,7 @@ export class Badge extends fabric.Rect {
 
 // OCR形状 - 用于绘制OCR结果框（带编号徽标）
 export class Ocr extends fabric.Rect {
-  static type = "Ocr";
+  static type = "ocr";
   declare accentColor?: string;
   declare label?: string | number;
 
@@ -214,7 +214,7 @@ export class Ocr extends fabric.Rect {
 }
 
 export class WaitingRect extends fabric.Rect {
-  static type = "WaitingRect";
+  static type = "waiting-rect";
   declare scanLineX?: number;
   declare label?: string;
   declare accentColor?: string;

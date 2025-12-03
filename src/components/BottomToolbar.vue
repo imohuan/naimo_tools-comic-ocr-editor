@@ -4,7 +4,7 @@
   >
     <!-- 左侧页码 -->
     <div
-      class="flex items-center gap-3 pr-3 border-r border-gray-200 flex-shrink-0"
+      class="hidden flex items-center gap-3 pr-3 border-r border-gray-200 flex-shrink-0"
     >
       <span
         class="font-mono font-bold text-lg text-gray-700 whitespace-nowrap px-3"
@@ -15,7 +15,7 @@
 
     <!-- 缩放控制 -->
     <div
-      class="flex items-center gap-2 pr-3 border-r border-gray-200 flex-shrink-0"
+      class="hidden flex items-center gap-2 pr-3 border-r border-gray-200 flex-shrink-0"
     >
       <ToolbarButton
         :disabled="!hasImage"
@@ -154,6 +154,64 @@
         </svg>
       </ToolbarButton>
 
+      <!-- 画笔模式切换按钮 -->
+      <ToolbarButton
+        :disabled="!hasImage"
+        :shortcut="brushModeShortcut"
+        :title="
+          brushModeEnabled
+            ? '关闭画笔模式 (按 Z 切换)'
+            : '开启画笔模式 (按 Z 切换)'
+        "
+        :class="
+          brushModeEnabled
+            ? 'bg-pink-600! text-white hover:bg-pink-700! shadow-lg'
+            : 'hover:bg-pink-50'
+        "
+      >
+        <svg
+          viewBox="0 0 24 24"
+          fill="none"
+          stroke="currentColor"
+          stroke-width="2"
+          stroke-linecap="round"
+          stroke-linejoin="round"
+          class="w-4 h-4"
+        >
+          <path d="M12 19l7-7 3 3-7 7-3-3z" />
+          <path d="M18 13l-1.5-7.5L2 2l3.5 14.5L13 18l5-5z" />
+          <path d="M2 2l7.586 7.586" />
+          <circle cx="11" cy="11" r="2" />
+        </svg>
+      </ToolbarButton>
+
+      <!-- 对比模式切换按钮 -->
+      <ToolbarButton
+        :disabled="!hasImage"
+        :shortcut="compareShortcut"
+        :title="isComparing ? '关闭对比模式' : '开启对比模式'"
+        :class="
+          isComparing
+            ? 'bg-blue-600! text-white hover:bg-blue-700! shadow-lg'
+            : 'hover:bg-blue-50'
+        "
+        @click="handleToggleCompare"
+      >
+        <svg
+          viewBox="0 0 24 24"
+          fill="none"
+          stroke="currentColor"
+          stroke-width="2"
+          stroke-linecap="round"
+          stroke-linejoin="round"
+          class="w-4 h-4"
+        >
+          <rect x="3" y="3" width="18" height="18" rx="2" />
+          <path d="M12 3v18" />
+          <path d="M3 12h18" />
+        </svg>
+      </ToolbarButton>
+
       <!-- 设置按钮 -->
       <ToolbarButton
         :shortcut="settingsShortcut"
@@ -181,6 +239,7 @@
 
 <script setup lang="ts">
 import { onMounted, onUnmounted } from "vue";
+import { useEventListener } from "@vueuse/core";
 import ToolbarButton from "./ToolbarButton.vue";
 import { useKeyboardShortcuts } from "../composables/useKeyboardShortcuts.js";
 
@@ -192,6 +251,10 @@ interface Props {
   ocrLoading: boolean;
   // 是否处于等待识别框模式，由父组件控制，保证默认关闭
   waitingMode?: boolean;
+  // 是否处于画笔模式，由父组件控制
+  brushModeEnabled?: boolean;
+  // 是否处于对比模式
+  isComparing?: boolean;
 }
 
 interface Emits {
@@ -202,10 +265,14 @@ interface Emits {
   (e: "clear-ocr"): void;
   (e: "settings"): void;
   (e: "toggle-waiting-mode", enabled: boolean): void;
+  (e: "toggle-brush-mode", enabled: boolean): void;
+  (e: "toggle-compare"): void;
 }
 
 const props = withDefaults(defineProps<Props>(), {
   waitingMode: false,
+  brushModeEnabled: false,
+  isComparing: false,
 });
 const emit = defineEmits<Emits>();
 
@@ -216,6 +283,8 @@ const zoomResetShortcut = "r";
 const ocrShortcut = "q";
 const clearShortcut = "x";
 const waitingModeShortcut = "w";
+const brushModeShortcut = "z";
+const compareShortcut = "c";
 const settingsShortcut = "s";
 
 // 实际注册的快捷键（包括不在按钮上显示的）
@@ -263,6 +332,43 @@ const handleToggleWaitingMode = () => {
   }
 };
 
+const handleToggleCompare = () => {
+  if (props.hasImage) {
+    emit("toggle-compare");
+  }
+};
+
+const handleBrushModeKeyDown = (e: KeyboardEvent) => {
+  if (!props.hasImage) return;
+  // 忽略在输入框中的快捷键
+  const target = e.target as HTMLElement;
+  if (
+    target.tagName === "INPUT" ||
+    target.tagName === "TEXTAREA" ||
+    target.isContentEditable
+  ) {
+    return;
+  }
+  if (e.key === "z" || e.key === "Z") {
+    if (!props.brushModeEnabled) {
+      emit("toggle-brush-mode", true);
+    }
+  }
+};
+
+const handleBrushModeKeyUp = (e: KeyboardEvent) => {
+  if (!props.hasImage) return;
+  if (e.key === "z" || e.key === "Z") {
+    if (props.brushModeEnabled) {
+      emit("toggle-brush-mode", false);
+    }
+  }
+};
+
+// 使用 VueUse 监听画笔模式的键盘事件
+useEventListener(window, "keydown", handleBrushModeKeyDown, { capture: true });
+useEventListener(window, "keyup", handleBrushModeKeyUp, { capture: true });
+
 // 快捷键处理
 const { registerShortcut, unregisterShortcut } = useKeyboardShortcuts();
 
@@ -275,6 +381,7 @@ onMounted(() => {
   registerShortcut(ocrShortcut, handleOcr);
   registerShortcut(clearShortcut, handleClearCanvas);
   registerShortcut(waitingModeShortcut, handleToggleWaitingMode);
+  registerShortcut(compareShortcut, handleToggleCompare);
   registerShortcut(settingsShortcut, handleSettings);
 });
 
@@ -285,6 +392,7 @@ onUnmounted(() => {
   unregisterShortcut(ocrShortcut);
   unregisterShortcut(clearShortcut);
   unregisterShortcut(waitingModeShortcut);
+  unregisterShortcut(compareShortcut);
   unregisterShortcut(settingsShortcut);
 });
 </script>

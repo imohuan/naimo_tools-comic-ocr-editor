@@ -59,6 +59,8 @@ export interface ImageItem {
   url: string;
   ocrResult: OcrTextResult | null;
   ocrLoading: boolean;
+  // 处理好的图片 URL（如 final.png），如果存在则优先使用此图片替换原图
+  processedImageUrl?: string | null;
 }
 
 export interface OcrConfig {

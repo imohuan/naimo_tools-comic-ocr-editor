@@ -57,6 +57,7 @@ export const useOcrStore = defineStore("ocr-store", () => {
         url,
         ocrResult: null,
         ocrLoading: false,
+        processedImageUrl: null,
       });
     });
     if (images.value.length > 0) {
@@ -136,8 +137,17 @@ export const useOcrStore = defineStore("ocr-store", () => {
     imageRef.ocrLoading = true;
 
     try {
+      // 处理好的图片 URL 回调
+      const onProcessedImage = (imageUrl: string) => {
+        // 再次查找图片，确保仍然存在
+        const target = findImageById(imageId);
+        if (target) {
+          target.processedImageUrl = imageUrl;
+        }
+      };
+
       const [ocrResult, dimensions] = await Promise.all([
-        requestOcr(file),
+        requestOcr(file, onProcessedImage),
         getImageDimensions(file).catch((error) => {
           console.error("读取图片尺寸失败:", error);
           return null;

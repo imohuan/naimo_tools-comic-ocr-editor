@@ -59,8 +59,9 @@ export function useCanvasPan(
 
     // 普通左键行为：根据等待模式决定是否允许框选
     if (e.button === 0) {
-      const disableSelection = isWaitingMode?.value === true;
-      fabricCanvas.value.selection = !disableSelection;
+      // const disableSelection = isWaitingMode?.value === true;
+      // fabricCanvas.value.selection = !disableSelection;
+      fabricCanvas.value.selection = false;
     }
   };
 
@@ -74,6 +75,7 @@ export function useCanvasPan(
       vpt[5] += e.clientY - lastPanPoint.y;
       fabricCanvas.value.setViewportTransform(vpt);
       fabricCanvas.value.requestRenderAll();
+      canvasEventBus.emit("canvas:pan");
     }
     if (isRightMouseDown) {
       rightClickMoved = true;

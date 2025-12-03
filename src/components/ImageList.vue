@@ -224,7 +224,7 @@
       <!-- 展开状态：完整按钮 + 模式下拉 -->
       <div
         v-else
-        class="w-full inline-flex items-stretch h-8 rounded-md overflow-hidden"
+        class="inline-flex items-stretch h-8 rounded-md overflow-hidden"
         :class="
           batchRunning
             ? 'bg-red-500 text-white'

@@ -17,30 +17,33 @@
       </div>
 
       <!-- 中间画布区域 -->
-      <div class="flex-1 flex flex-col relative bg-gray-50 w-full">
+      <div class="flex-1 flex flex-col relative bg-gray-50 w-full overflow-hidden">
         <!-- 画布 + 底部控制栏（在画布容器内部居中） -->
         <div class="flex-1 relative overflow-hidden">
           <Canvas
             ref="canvasRef"
-            :image="currentImage?.file"
+            :image="displayImage"
+            :original-image="originalImage"
             :ocr-result="currentImage?.ocrResult"
             :waiting-mode="isWaitingMode"
+            :brush-mode-enabled="brushModeEnabled"
             @change-detail="handleChangeDetail"
             @waiting-rect-complete="handleWaitingRectComplete"
             @delete-detail="handleDeleteDetail"
             @re-ocr-detail="handleReOcrDetail"
+            @compare="handleCompare"
           />
 
           <!-- 底部控制栏：相对于画布区域绝对定位并水平居中 -->
           <BottomToolbar
-            :current-page="
-              ocrStore.images.length > 0 ? ocrStore.currentIndex + 1 : 0
-            "
+            :current-page="ocrStore.images.length > 0 ? ocrStore.currentIndex + 1 : 0"
             :total-pages="ocrStore.images.length"
             :display-zoom="displayZoom"
             :has-image="!!currentImage"
             :ocr-loading="ocrLoading"
             :waiting-mode="isWaitingMode"
+            :brush-mode-enabled="brushModeEnabled"
+            :is-comparing="isComparing"
             @zoom-in="handleZoomIn"
             @zoom-out="handleZoomOut"
             @zoom-reset="handleZoomReset"
@@ -48,7 +51,25 @@
             @clear-ocr="handleClearCanvas"
             @settings="showSettings = true"
             @toggle-waiting-mode="handleToggleWaitingMode"
+            @toggle-brush-mode="handleToggleBrushMode"
+            @toggle-compare="handleToggleCompare"
           />
+
+          <!-- 页码显示 - 左上角 -->
+          <div
+            v-if="ocrStore.images.length > 0"
+            class="absolute bottom-4 left-4 z-50 text-gray-500 font-mono font-bold text-lg"
+          >
+            {{ ocrStore.currentIndex + 1 }} / {{ ocrStore.images.length }}
+          </div>
+
+          <!-- 缩放值显示 - 右下角 -->
+          <div
+            v-if="currentImage"
+            class="absolute bottom-4 right-4 z-50 text-gray-500 text-sm font-semibold"
+          >
+            {{ displayZoom }}
+          </div>
         </div>
       </div>
     </div>
@@ -92,6 +113,8 @@ const ocrStore = useOcrStore();
 const ocrLoading = computed(() => ocrStore.ocrLoading);
 const zoomLevel = ref(1);
 const isWaitingMode = ref(false);
+const brushModeEnabled = ref(false);
+const isComparing = ref(false);
 // 左侧图片列表折叠状态
 const isImageListCollapsed = ref(false);
 // 右侧文本结果折叠状态
@@ -101,6 +124,16 @@ const textSidebarWidth = ref(260);
 const { voiceRoleOptions, loadVoiceRoleOptions } = useEdgeTts();
 
 const currentImage = computed(() => ocrStore.currentImage);
+
+// 计算当前应该显示的图片（优先使用处理好的图片）
+const displayImage = computed(() => {
+  return currentImage.value?.processedImageUrl || currentImage.value?.file;
+});
+
+// 计算原始图片（用于对比功能）
+const originalImage = computed(() => {
+  return currentImage.value?.file || currentImage.value?.url;
+});
 
 const displayZoom = computed(() => {
   const zoom = zoomLevel.value;
@@ -161,6 +194,18 @@ const handleZoomReset = () => {
 
 const handleToggleWaitingMode = (enabled: boolean) => {
   isWaitingMode.value = enabled;
+};
+
+const handleToggleBrushMode = (enabled: boolean) => {
+  brushModeEnabled.value = enabled;
+};
+
+const handleToggleCompare = () => {
+  canvasRef.value?.toggleCompare();
+};
+
+const handleCompare = (enabled: boolean) => {
+  isComparing.value = enabled;
 };
 
 const toggleImageListCollapse = () => {

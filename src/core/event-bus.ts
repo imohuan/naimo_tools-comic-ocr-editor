@@ -5,6 +5,7 @@ export type CanvasEvents = {
   "canvas:zoom-out": void;
   "canvas:zoom-reset": void;
   "canvas:zoom": { level: number };
+  "canvas:pan": void;
   "canvas:clear": void;
   // 右键菜单事件：在画布上短按右键松开时触发
   "canvas:context-menu": {

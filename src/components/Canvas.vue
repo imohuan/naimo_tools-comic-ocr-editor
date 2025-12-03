@@ -1,6 +1,35 @@
 <template>
   <div ref="container" class="w-full h-full relative">
     <canvas ref="canvasDom"></canvas>
+
+    <!-- 对比模式的分割线和标签 -->
+    <template v-if="isComparing">
+      <!-- 左侧标签 -->
+      <div
+        class="absolute top-4 left-4 bg-black/70 text-white px-4 py-2 rounded-md text-sm font-medium z-50 pointer-events-none backdrop-blur"
+      >
+        原图
+      </div>
+
+      <!-- 右侧标签 -->
+      <div
+        class="absolute top-4 right-4 bg-black/70 text-white px-4 py-2 rounded-md text-sm font-medium z-50 pointer-events-none backdrop-blur"
+      >
+        处理后
+      </div>
+
+      <!-- 分割线 -->
+      <div
+        class="absolute top-0 bottom-0 w-1 bg-blue-600 cursor-ew-resize z-50 -translate-x-1/2"
+        :style="{ left: comparePosition + '%' }"
+        @mousedown.stop="handleDividerMouseDown"
+      >
+        <div
+          class="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-10 h-20 bg-blue-600 rounded-full shadow-[0_4px_12px_rgba(59,130,246,0.4)] flex items-center justify-center before:content-[''] before:absolute before:left-3.5 before:w-0.5 before:h-5 before:bg-white after:content-[''] after:absolute after:right-3.5 after:w-0.5 after:h-5 after:bg-white"
+        ></div>
+      </div>
+    </template>
+
     <!-- 自定义右键菜单 -->
     <div
       v-if="showContextMenu"
@@ -71,24 +100,30 @@
 </template>
 
 <script setup lang="ts">
-import { ref, watch, onMounted, nextTick, onUnmounted } from "vue";
+import { ref, watch, computed, onMounted, nextTick, onUnmounted } from "vue";
 import type { OcrTextResult } from "../types";
 import { useCanvas } from "../composables/useCanvas";
 import { useCanvasPan } from "../composables/useCanvasPan";
 import { useCanvasZoom } from "../composables/useCanvasZoom";
 import { useCanvasDrawing } from "../composables/useCanvasDrawing";
+import { useCanvasBrush } from "../composables/useCanvasBrush";
+import { useCanvasCompare } from "../composables/useCanvasCompare";
 import { canvasEventBus } from "../core/event-bus";
 
 interface Props {
   image?: File | string;
+  originalImage?: File | string;
   ocrResult?: OcrTextResult | null;
   waitingMode?: boolean;
+  brushModeEnabled?: boolean;
 }
 
 const props = withDefaults(defineProps<Props>(), {
   image: undefined,
+  originalImage: undefined,
   ocrResult: null,
   waitingMode: false,
+  brushModeEnabled: false,
 });
 
 const emits = defineEmits<{
@@ -104,6 +139,7 @@ const emits = defineEmits<{
   ];
   "delete-detail": [detailIndex: number];
   "re-ocr-detail": [detailIndex: number];
+  compare: [isComparing: boolean];
 }>();
 
 const container = ref<HTMLDivElement>();
@@ -135,29 +171,59 @@ const {
 } = useCanvasDrawing(fabricCanvas, imageRect);
 
 useCanvasPan(fabricCanvas, isWaitingMode);
+const brushModeEnabledRef = computed(() => props.brushModeEnabled);
+useCanvasBrush(fabricCanvas, brushModeEnabledRef);
 const { zoomLevel } = useCanvasZoom(fabricCanvas, imageRect);
+
+// 对比功能
+const {
+  isComparing,
+  comparePosition,
+  loadCompareImages,
+  handleDividerMouseDown,
+  handleGlobalMouseMove,
+  handleGlobalMouseUp,
+  toggleCompare,
+  handleViewportChange,
+} = useCanvasCompare(fabricCanvas, imageRect, container);
 
 // 统一的图片 + OCR 加载逻辑，并在最后触发重置事件
 const loadImageWithOcr = async (
   image?: File | string,
   ocrResult?: OcrTextResult | null
 ) => {
+  // 先清空画布
+  clearCanvas();
+
+  // 没有图片时直接返回
   if (!image) {
-    // 没有图片时清空画布
-    clearCanvas();
     return;
   }
 
-  // 先加载图片（内部会清空画布并绘制图片）
-  await loadImage(image);
-
-  // 再绘制当前图片对应的 OCR 结果框，确保在图片之上
-  await nextTick();
-  if (ocrResult) {
-    loadOcrBoxes(ocrResult);
+  // 如果在对比模式，加载对比图片
+  if (isComparing.value) {
+    const original = props.originalImage || props.image;
+    const processed = props.image;
+    if (original && processed) {
+      await loadCompareImages(original, processed);
+      // 等待图片加载完成后再绘制OCR框
+      await nextTick();
+      if (ocrResult && imageRect.value && imageRect.value.w > 0) {
+        loadOcrBoxes(ocrResult);
+      }
+    }
+  } else {
+    // 先加载图片（内部会清空画布并绘制图片）
+    await loadImage(image);
+    // 再绘制当前图片对应的 OCR 结果框，确保在图片之上
+    await nextTick();
+    if (ocrResult) {
+      loadOcrBoxes(ocrResult);
+    }
   }
 
   // 通过全局画布事件总线触发缩放重置（居中显示）
+  await nextTick();
   canvasEventBus.emit("canvas:zoom-reset");
 };
 
@@ -167,43 +233,40 @@ watch([() => container.value], () => {
   }
 });
 
+// 同时监听图片和 OCR 结果的变化，确保同步更新
 watch(
-  () => props.image,
-  async (image) => {
-    await loadImageWithOcr(image, props.ocrResult);
+  [() => props.image, () => props.originalImage, () => props.ocrResult],
+  async ([image, _, ocrResult]) => {
+    await loadImageWithOcr(image, ocrResult ?? null);
   }
 );
 
-let ocrResultWatchTimer: number | null = null;
+// 监听对比模式变化
 watch(
-  () => props.ocrResult,
-  (ocrResult, oldOcrResult) => {
-    // 避免重复触发：如果引用相同，则不处理
-    if (ocrResult === oldOcrResult) return;
-
-    // 清除之前的定时器，防止重复触发
-    if (ocrResultWatchTimer !== null) {
-      clearTimeout(ocrResultWatchTimer);
-      ocrResultWatchTimer = null;
-    }
-
-    if (ocrResult) {
-      // 使用防抖，确保不会重复调用
-      ocrResultWatchTimer = window.setTimeout(() => {
-        try {
-          loadOcrBoxes(ocrResult);
-        } catch (error) {
-          console.error("加载OCR结果时出错:", error);
-        } finally {
-          ocrResultWatchTimer = null;
+  () => isComparing.value,
+  async (enabled) => {
+    if (enabled) {
+      const original = props.originalImage || props.image;
+      const processed = props.image;
+      if (original && processed) {
+        await loadCompareImages(original, processed);
+        await nextTick();
+        if (props.ocrResult) {
+          loadOcrBoxes(props.ocrResult);
         }
-      }, 0);
+      }
     } else {
-      // 当 ocrResult 为 null 时，清除所有 OCR 框
-      clearOcrResults();
+      // 退出对比模式，恢复正常显示
+      if (props.image) {
+        await loadImage(props.image);
+        await nextTick();
+        if (props.ocrResult) {
+          loadOcrBoxes(props.ocrResult);
+        }
+      }
     }
-  },
-  { flush: "post" }
+    emits("compare", enabled);
+  }
 );
 
 const handleWaitingRectComplete = (rect: any) => {
@@ -272,10 +335,18 @@ onMounted(() => {
   }
   setWaitingMode(props.waitingMode);
   canvasEventBus.on("canvas:context-menu", handleCanvasContextMenu);
+  canvasEventBus.on("canvas:zoom", handleViewportChange);
+  canvasEventBus.on("canvas:pan", handleViewportChange);
+  document.addEventListener("mousemove", handleGlobalMouseMove);
+  document.addEventListener("mouseup", handleGlobalMouseUp);
 });
 
 onUnmounted(() => {
   canvasEventBus.off("canvas:context-menu", handleCanvasContextMenu);
+  canvasEventBus.off("canvas:zoom", handleViewportChange);
+  canvasEventBus.off("canvas:pan", handleViewportChange);
+  document.removeEventListener("mousemove", handleGlobalMouseMove);
+  document.removeEventListener("mouseup", handleGlobalMouseUp);
 });
 
 defineExpose({
@@ -287,6 +358,8 @@ defineExpose({
   clearAllWaitingRects,
   canvasToImageCoords,
   imageRect,
+  toggleCompare,
+  isComparing: computed(() => isComparing.value),
 });
 </script>
 

@@ -123,7 +123,7 @@
         class="border-t border-gray-200 px-3 py-2 flex items-center justify-start text-xs"
       >
         <div
-          class="w-full inline-flex items-stretch h-8 rounded-md overflow-hidden"
+          class="inline-flex items-stretch h-8 rounded-md overflow-hidden"
           :class="
             batchRunning
               ? 'bg-red-500 text-white'

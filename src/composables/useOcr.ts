@@ -7,7 +7,10 @@ const BASE_URI = "http://127.0.0.1:5003/";
 export function useOcr() {
   const isLoading = ref(false);
 
-  const handleOcr = async (file: File): Promise<OcrTextResult> => {
+  const handleOcr = async (
+    file: File,
+    onProcessedImage?: (imageUrl: string) => void
+  ): Promise<OcrTextResult> => {
     isLoading.value = true;
     try {
       const config = await getOcrConfig();
@@ -30,6 +33,8 @@ export function useOcr() {
       // 解析流式响应
       const reader = response.body.getReader();
       let buffer = new Uint8Array();
+      let currentFolder: string | null = null;
+      let ocrResult: OcrTextResult | null = null;
 
       while (true) {
         const { done, value } = await reader.read();
@@ -97,7 +102,7 @@ export function useOcr() {
                     return "";
                   };
 
-                  const result: OcrTextResult = {
+                  ocrResult = {
                     details: jsonData.translations.map((trans: any) => {
                       const translatedText = pickText(trans.text, targetLang);
                       const originFromText = pickText(
@@ -132,32 +137,70 @@ export function useOcr() {
                     img: null,
                     detection_size: jsonData.detection_size || 1536,
                   };
-                  return result;
-                }
 
-                // 如果已经是 details 格式，直接返回
-                if (jsonData.details && Array.isArray(jsonData.details)) {
-                  return jsonData as OcrTextResult;
+                  // 如果 JSON 数据中包含 debug_folder，设置文件夹
+                  if (jsonData.debug_folder) {
+                    currentFolder = jsonData.debug_folder;
+                    const processedImageUrl = `${BASE_URI}result/${currentFolder}/final.png`;
+                    if (onProcessedImage) {
+                      onProcessedImage(processedImageUrl);
+                    }
+                  }
+                } else if (
+                  jsonData.details &&
+                  Array.isArray(jsonData.details)
+                ) {
+                  // 如果已经是 details 格式，直接使用
+                  ocrResult = jsonData as OcrTextResult;
+                } else {
+                  // 如果都不匹配，返回空结果
+                  console.warn("OCR结果格式不正确，无法解析", jsonData);
+                  ocrResult = {
+                    details: [],
+                    img: null,
+                    detection_size: jsonData.detection_size || 1536,
+                  };
                 }
-
-                // 如果都不匹配，返回空结果
-                console.warn("OCR结果格式不正确，无法解析", jsonData);
-                return {
-                  details: [],
-                  img: null,
-                  detection_size: jsonData.detection_size || 1536,
-                };
               } catch (error) {
                 console.error("解析JSON失败:", error);
               }
+            } else if (statusCode === 1) {
+              // 状态文本
+              const newStatus = decoder.decode(data);
+              console.log("状态更新:", newStatus);
+
+              // rendering_folder:xxx / final_ready:xxx / 或普通状态文本
+              if (newStatus.startsWith("rendering_folder:")) {
+                currentFolder = newStatus.substring(17);
+              } else if (newStatus.startsWith("final_ready:")) {
+                const readyFolder = newStatus.substring(12);
+                if (!currentFolder) {
+                  currentFolder = readyFolder;
+                }
+                // final.png 已就绪，通知处理好的图片 URL
+                const processedImageUrl = `${BASE_URI}result/${currentFolder}/final.png`;
+                if (onProcessedImage) {
+                  onProcessedImage(processedImageUrl);
+                }
+              }
+            } else if (statusCode === 2) {
+              // 错误信息
+              const errText = decoder.decode(data);
+              console.error("OCR 错误:", errText);
+              throw new Error(errText);
             }
+            // statusCode === 3 和 4 是队列相关，可以忽略
 
             buffer = buffer.slice(totalSize);
           }
         }
       }
 
-      throw new Error("未收到OCR结果");
+      if (!ocrResult) {
+        throw new Error("未收到OCR结果");
+      }
+
+      return ocrResult;
     } finally {
       isLoading.value = false;
     }
