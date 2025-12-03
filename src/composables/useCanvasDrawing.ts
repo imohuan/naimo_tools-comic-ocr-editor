@@ -1,6 +1,5 @@
 import { type Ref, ref } from "vue";
 import { useKeyModifier } from "@vueuse/core";
-import * as fabric from "fabric";
 import { WaitingRect } from "../core/fabric-shapes";
 
 const WAITING_RECT_STYLE = {
@@ -35,10 +34,8 @@ export function useCanvasDrawing(
 ) {
   const shiftKey = useKeyModifier("Shift");
   const isWaitingMode = ref(false);
-  let isDrawingOcr = false;
   let isDrawingWaiting = false;
   let startPoint = { x: 0, y: 0 };
-  let currentOcrRect: fabric.Rect | null = null;
   let currentWaitingRect: WaitingRect | null = null;
   let waitingRects: WaitingRectInfo[] = [];
 
@@ -50,7 +47,7 @@ export function useCanvasDrawing(
 
     const altKey = e.altKey;
 
-    // 等待识别框模式
+    // 等待识别框模式（按钮开启）
     if (isWaitingMode.value && !altKey) {
       isDrawingWaiting = true;
       const pointer = fabricCanvas.value.getPointer(e);
@@ -68,22 +65,20 @@ export function useCanvasDrawing(
       return;
     }
 
-    // 原有的 Shift+点击绘制模式
+    // Shift + 拖拽：同样绘制 WaitingRect 作为框选效果
     if (shiftKey.value && !altKey) {
-      isDrawingOcr = true;
+      isDrawingWaiting = true;
       const pointer = fabricCanvas.value.getPointer(e);
       startPoint = { x: pointer.x, y: pointer.y };
-      currentOcrRect = new fabric.Rect({
+      currentWaitingRect = new WaitingRect({
         left: pointer.x,
         top: pointer.y,
         width: 0,
         height: 0,
-        fill: "rgba(255, 0, 0, 0.1)",
-        stroke: "#ff0000",
-        strokeWidth: 2,
         selectable: false,
+        ...WAITING_RECT_STYLE,
       });
-      fabricCanvas.value.add(currentOcrRect);
+      fabricCanvas.value.add(currentWaitingRect);
       e.preventDefault();
     }
   };
@@ -100,7 +95,7 @@ export function useCanvasDrawing(
     const left = Math.min(startPoint.x, pointer.x);
     const top = Math.min(startPoint.y, pointer.y);
 
-    // 等待识别框模式
+    // 等待识别框模式 / Shift 框选
     if (isDrawingWaiting && currentWaitingRect) {
       currentWaitingRect.set({
         width,
@@ -111,23 +106,12 @@ export function useCanvasDrawing(
       fabricCanvas.value.renderAll();
       return;
     }
-
-    // 原有的 OCR 框绘制模式
-    if (isDrawingOcr && currentOcrRect) {
-      currentOcrRect.set({
-        width,
-        height,
-        left,
-        top,
-      });
-      fabricCanvas.value.renderAll();
-    }
   };
 
   const handleMouseUp = (callback?: (rect: WaitingRectInfo) => void) => {
     if (!fabricCanvas.value) return;
 
-    // 等待识别框模式
+    // 等待识别框模式 / Shift 框选
     if (isDrawingWaiting && currentWaitingRect) {
       const { width, height, left, top } = currentWaitingRect;
       if (width > 10 && height > 10) {
@@ -149,18 +133,6 @@ export function useCanvasDrawing(
       currentWaitingRect = null;
       isDrawingWaiting = false;
       return;
-    }
-
-    // 原有的 OCR 框绘制模式
-    if (isDrawingOcr && currentOcrRect) {
-      const { width, height } = currentOcrRect;
-      if (width > 10 && height > 10) {
-        console.log("OCR框绘制完成", currentOcrRect);
-      } else {
-        fabricCanvas.value.remove(currentOcrRect);
-      }
-      currentOcrRect = null;
-      isDrawingOcr = false;
     }
   };
 
