@@ -16,6 +16,10 @@ export function useCanvasCompare(
   const originalImageObj = ref<fabric.Image | null>(null);
   const processedImageObj = ref<fabric.Image | null>(null);
 
+  // 保存 blob URL，避免过早释放
+  let originalBlobUrl: string | null = null;
+  let processedBlobUrl: string | null = null;
+
   // 防抖标志，避免重复调用
   let isRedrawing = false;
 
@@ -107,6 +111,16 @@ export function useCanvasCompare(
   ) => {
     if (!fabricCanvas.value) return;
 
+    // 释放之前的 blob URL
+    if (originalBlobUrl && originalBlobUrl.startsWith("blob:")) {
+      URL.revokeObjectURL(originalBlobUrl);
+      originalBlobUrl = null;
+    }
+    if (processedBlobUrl && processedBlobUrl.startsWith("blob:")) {
+      URL.revokeObjectURL(processedBlobUrl);
+      processedBlobUrl = null;
+    }
+
     // 清空画布和图片对象
     fabricCanvas.value.clear();
     originalImageObj.value = null;
@@ -115,10 +129,12 @@ export function useCanvasCompare(
     // 加载原图
     const originalUrl: string =
       typeof original === "string" ? original : URL.createObjectURL(original);
-    const originalImg = await fabric.Image.fromURL(originalUrl);
     if (typeof original !== "string") {
-      URL.revokeObjectURL(originalUrl);
+      originalBlobUrl = originalUrl;
     }
+
+    // 使用 Promise 方式加载图片（fabric.Image.fromURL 返回 Promise）
+    const originalImg = await fabric.Image.fromURL(originalUrl);
 
     // 加载处理后的图（如果原图和处理后的图是同一个，则复用）
     let processedImg: fabric.Image;
@@ -129,10 +145,12 @@ export function useCanvasCompare(
         typeof processed === "string"
           ? processed
           : URL.createObjectURL(processed);
-      processedImg = await fabric.Image.fromURL(processedUrl);
       if (typeof processed !== "string") {
-        URL.revokeObjectURL(processedUrl);
+        processedBlobUrl = processedUrl;
       }
+
+      // 使用 Promise 方式加载图片
+      processedImg = await fabric.Image.fromURL(processedUrl);
     }
 
     // 计算缩放和位置（与原图加载逻辑保持一致）
@@ -221,10 +239,26 @@ export function useCanvasCompare(
     isDraggingDivider.value = false;
   };
 
+  // 清理 blob URL
+  const cleanupBlobUrls = () => {
+    if (originalBlobUrl && originalBlobUrl.startsWith("blob:")) {
+      URL.revokeObjectURL(originalBlobUrl);
+      originalBlobUrl = null;
+    }
+    if (processedBlobUrl && processedBlobUrl.startsWith("blob:")) {
+      URL.revokeObjectURL(processedBlobUrl);
+      processedBlobUrl = null;
+    }
+  };
+
   // 切换对比模式
   const toggleCompare = () => {
     isComparing.value = !isComparing.value;
     comparePosition.value = 50;
+    // 退出对比模式时清理 blob URL
+    if (!isComparing.value) {
+      cleanupBlobUrls();
+    }
   };
 
   // 监听分割线位置变化
@@ -272,5 +306,6 @@ export function useCanvasCompare(
     handleGlobalMouseUp,
     toggleCompare,
     handleViewportChange,
+    cleanupBlobUrls,
   };
 }

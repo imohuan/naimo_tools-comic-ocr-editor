@@ -3,7 +3,7 @@ import { ref, computed, watch, nextTick } from "vue";
 import type { ImageItem, OcrTextDetail, OcrTextResult } from "../types";
 import { useArrayHistory } from "../composables/useArrayHistory";
 import { useOcr } from "../composables/useOcr";
-import { getImageDimensions } from "../utils/image";
+import { getImageDimensions, compositeImages } from "../utils/image";
 import { normalizeOcrResult } from "../utils/ocr";
 
 // 全局 OCR / 图片状态管理
@@ -127,7 +127,11 @@ export const useOcrStore = defineStore("ocr-store", () => {
     applyResult: (
       prev: OcrTextResult | null,
       next: OcrTextResult
-    ) => OcrTextResult
+    ) => OcrTextResult,
+    options?: {
+      updateProcessedImage?: boolean;
+      patchArea?: { x: number; y: number; width: number; height: number };
+    }
   ) => {
     // 第一次查找：在请求前确认图片存在，并打开 loading 状态
     const imageRef = findImageById(imageId);
@@ -138,11 +142,33 @@ export const useOcrStore = defineStore("ocr-store", () => {
 
     try {
       // 处理好的图片 URL 回调
-      const onProcessedImage = (imageUrl: string) => {
+      const onProcessedImage = async (imageUrl: string) => {
         // 再次查找图片，确保仍然存在
         const target = findImageById(imageId);
-        if (target) {
-          target.processedImageUrl = imageUrl;
+        if (!target) return;
+
+        // 只有在未显式禁用更新时才替换图片
+        if (options?.updateProcessedImage !== false) {
+          if (options?.patchArea) {
+            // 如果提供了 patchArea，则进行局部替换
+            const baseImage = target.processedImageUrl || target.url;
+            try {
+              const newImageUrl = await compositeImages(
+                baseImage,
+                imageUrl,
+                options.patchArea.x,
+                options.patchArea.y,
+                options.patchArea.width,
+                options.patchArea.height
+              );
+              target.processedImageUrl = newImageUrl;
+            } catch (error) {
+              console.error("图片合成失败:", error);
+            }
+          } else {
+            // 否则直接替换整张图片
+            target.processedImageUrl = imageUrl;
+          }
         }
       };
 

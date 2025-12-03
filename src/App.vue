@@ -125,14 +125,14 @@ const { voiceRoleOptions, loadVoiceRoleOptions } = useEdgeTts();
 
 const currentImage = computed(() => ocrStore.currentImage);
 
-// 计算当前应该显示的图片（优先使用处理好的图片）
-const displayImage = computed(() => {
-  return currentImage.value?.processedImageUrl || currentImage.value?.file;
-});
-
 // 计算原始图片（用于对比功能）
 const originalImage = computed(() => {
   return currentImage.value?.file || currentImage.value?.url;
+});
+
+// 计算当前应该显示的图片（优先使用处理好的图片）
+const displayImage = computed(() => {
+  return currentImage.value?.processedImageUrl || originalImage.value;
 });
 
 const displayZoom = computed(() => {
@@ -303,51 +303,64 @@ const handleWaitingRectComplete = async (rect: {
     );
 
     // 提交 OCR 识别请求（结果通过 imageId 绑定到对应图片）
-    await ocrStore.runOcrTask(targetImage.id, croppedFile, (prev, next) => {
-      // OCR结果的坐标是相对于裁剪后的图片的（像素坐标）
-      // 需要转换为原图坐标（像素坐标），因为 loadOcrBoxes 期望原图坐标
-      const croppedImageWidth = imageCoords.width;
-      const croppedImageHeight = imageCoords.height;
+    await ocrStore.runOcrTask(
+      targetImage.id,
+      croppedFile,
+      (prev, next) => {
+        // OCR结果的坐标是相对于裁剪后的图片的（像素坐标）
+        // 需要转换为原图坐标（像素坐标），因为 loadOcrBoxes 期望原图坐标
+        const croppedImageWidth = imageCoords.width;
+        const croppedImageHeight = imageCoords.height;
 
-      // 将OCR结果从裁剪图片坐标转换为原图坐标
-      const originalImageDetails = next.details.map((detail) => {
-        // OCR坐标是相对于裁剪后图片的（像素）
-        // 计算在裁剪后图片中的相对位置（0-1）
-        const relativeX = detail.minX / croppedImageWidth;
-        const relativeY = detail.minY / croppedImageHeight;
-        const relativeWidth = (detail.maxX - detail.minX) / croppedImageWidth;
-        const relativeHeight = (detail.maxY - detail.minY) / croppedImageHeight;
+        // 将OCR结果从裁剪图片坐标转换为原图坐标
+        const originalImageDetails = next.details.map((detail) => {
+          // OCR坐标是相对于裁剪后图片的（像素）
+          // 计算在裁剪后图片中的相对位置（0-1）
+          const relativeX = detail.minX / croppedImageWidth;
+          const relativeY = detail.minY / croppedImageHeight;
+          const relativeWidth = (detail.maxX - detail.minX) / croppedImageWidth;
+          const relativeHeight = (detail.maxY - detail.minY) / croppedImageHeight;
 
-        // 转换为原图坐标（像素）
-        // 裁剪区域在原图中的位置是 imageCoords.x, imageCoords.y
-        const originalMinX = imageCoords.x + relativeX * croppedImageWidth;
-        const originalMinY = imageCoords.y + relativeY * croppedImageHeight;
-        const originalMaxX = originalMinX + relativeWidth * croppedImageWidth;
-        const originalMaxY = originalMinY + relativeHeight * croppedImageHeight;
+          // 转换为原图坐标（像素）
+          // 裁剪区域在原图中的位置是 imageCoords.x, imageCoords.y
+          const originalMinX = imageCoords.x + relativeX * croppedImageWidth;
+          const originalMinY = imageCoords.y + relativeY * croppedImageHeight;
+          const originalMaxX = originalMinX + relativeWidth * croppedImageWidth;
+          const originalMaxY = originalMinY + relativeHeight * croppedImageHeight;
+
+          return {
+            ...detail,
+            minX: originalMinX,
+            minY: originalMinY,
+            maxX: originalMaxX,
+            maxY: originalMaxY,
+          };
+        });
+
+        const base: OcrTextResult = prev
+          ? { ...prev }
+          : {
+              details: [],
+              img: null,
+              detection_size: next.detection_size,
+            };
 
         return {
-          ...detail,
-          minX: originalMinX,
-          minY: originalMinY,
-          maxX: originalMaxX,
-          maxY: originalMaxY,
+          ...base,
+          detection_size: next.detection_size,
+          details: [...base.details, ...originalImageDetails],
         };
-      });
-
-      const base: OcrTextResult = prev
-        ? { ...prev }
-        : {
-            details: [],
-            img: null,
-            detection_size: next.detection_size,
-          };
-
-      return {
-        ...base,
-        detection_size: next.detection_size,
-        details: [...base.details, ...originalImageDetails],
-      };
-    });
+      },
+      {
+        // 传入裁剪区域信息，用于局部替换图片
+        patchArea: {
+          x: imageCoords.x,
+          y: imageCoords.y,
+          width: imageCoords.width,
+          height: imageCoords.height,
+        },
+      }
+    );
 
     // 删除等待识别框
     if (rect.waitingRect) {
@@ -387,31 +400,44 @@ const handleReOcrDetail = async (detailIndex: number) => {
       cropHeight
     );
 
-    await ocrStore.runOcrTask(targetImage.id, croppedFile, (prev, next) => {
-      const baseResult = prev || {
-        details: [],
-        img: null,
-        detection_size: next.detection_size,
-      };
+    await ocrStore.runOcrTask(
+      targetImage.id,
+      croppedFile,
+      (prev, next) => {
+        const baseResult = prev || {
+          details: [],
+          img: null,
+          detection_size: next.detection_size,
+        };
 
-      const transformedDetails = next.details.map((item) => ({
-        ...item,
-        minX: detail.minX + item.minX,
-        minY: detail.minY + item.minY,
-        maxX: detail.minX + item.maxX,
-        maxY: detail.minY + item.maxY,
-      }));
+        const transformedDetails = next.details.map((item) => ({
+          ...item,
+          minX: detail.minX + item.minX,
+          minY: detail.minY + item.minY,
+          maxX: detail.minX + item.maxX,
+          maxY: detail.minY + item.maxY,
+        }));
 
-      const nextDetails = [...baseResult.details];
-      // 用新的识别结果替换原有的这一条
-      nextDetails.splice(detailIndex, 1, ...transformedDetails);
+        const nextDetails = [...baseResult.details];
+        // 用新的识别结果替换原有的这一条
+        nextDetails.splice(detailIndex, 1, ...transformedDetails);
 
-      return {
-        ...baseResult,
-        detection_size: next.detection_size,
-        details: nextDetails,
-      };
-    });
+        return {
+          ...baseResult,
+          detection_size: next.detection_size,
+          details: nextDetails,
+        };
+      },
+      {
+        // 传入裁剪区域信息，用于局部替换图片
+        patchArea: {
+          x: detail.minX,
+          y: detail.minY,
+          width: cropWidth,
+          height: cropHeight,
+        },
+      }
+    );
   } catch (error) {
     console.error("局部重新识别失败:", error);
   }

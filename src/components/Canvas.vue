@@ -185,6 +185,7 @@ const {
   handleGlobalMouseUp,
   toggleCompare,
   handleViewportChange,
+  cleanupBlobUrls,
 } = useCanvasCompare(fabricCanvas, imageRect, container);
 
 // 统一的图片 + OCR 加载逻辑，并在最后触发重置事件
@@ -347,6 +348,8 @@ onUnmounted(() => {
   canvasEventBus.off("canvas:pan", handleViewportChange);
   document.removeEventListener("mousemove", handleGlobalMouseMove);
   document.removeEventListener("mouseup", handleGlobalMouseUp);
+  // 清理 blob URL
+  cleanupBlobUrls();
 });
 
 defineExpose({
