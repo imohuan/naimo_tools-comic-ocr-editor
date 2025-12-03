@@ -102,6 +102,7 @@
           @update-origin="handleChangeOrigin"
           @update-voice-role="handleChangeVoiceRole"
           @delete-detail="handleDeleteDetail"
+          @update-audio-state="handleUpdateAudioState"
         />
       </VueDraggable>
 
@@ -284,6 +285,22 @@ const handleDeleteDetail = (detailIndex: number) => {
   const list = (detailsSource.value || []).filter(
     (_: any, idx: number) => idx !== detailIndex
   );
+  detailsSource.value = list;
+};
+
+// 更新某条 OCR 结果的音频生成状态（写回到 Store）
+const handleUpdateAudioState = (
+  detailIndex: number,
+  payload: Partial<OcrTextDetail>
+) => {
+  const list = [...(detailsSource.value || [])];
+  const target = list[detailIndex];
+  if (!target) return;
+
+  list[detailIndex] = {
+    ...target,
+    ...payload,
+  };
   detailsSource.value = list;
 };
 

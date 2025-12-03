@@ -85,6 +85,7 @@ import BottomToolbar from "./components/BottomToolbar.vue";
 import SidebarTabs from "./components/SidebarTabs.vue";
 import { canvasEventBus, uiEventBus } from "./core/event-bus";
 import type { OcrTextResult } from "./types/index";
+import { useEdgeTts } from "./composables/useEdgeTts";
 
 const themeOverrides = {
   common: {
@@ -108,15 +109,8 @@ const sidebarTabs: Array<{ key: SidebarTab; label: string }> = [
   { key: "text", label: "文本" },
 ];
 const activeSidebarTab = ref<SidebarTab>("images");
-
-// 语音角色选项（微软 TTS 示例）
-const voiceRoleOptions = [
-  { label: "默认", value: "" },
-  { label: "晓晓（女）", value: "zh-CN-XiaoxiaoNeural" },
-  { label: "晓梅（女）", value: "zh-CN-XiaomeiNeural" },
-  { label: "云皓（男）", value: "zh-CN-YunhaoNeural" },
-  { label: "云枫（男）", value: "zh-CN-YunfengNeural" },
-];
+// 使用 Edge TTS Hook 提供的播音人列表
+const { voiceRoleOptions, loadVoiceRoleOptions } = useEdgeTts();
 
 const currentImage = computed(() => ocrStore.currentImage);
 
@@ -413,6 +407,8 @@ const updateZoom = (event: { level: number }) => {
 onMounted(() => {
   canvasEventBus.on("canvas:zoom", updateZoom);
   uiEventBus.on("ui:sidebar-switch", handleSidebarTabChange);
+  // 加载播音人列表
+  loadVoiceRoleOptions();
   // 初始化时执行重置缩放，确保居中计算正确
   nextTick(() => {
     setTimeout(() => {

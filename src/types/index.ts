@@ -6,6 +6,10 @@ export interface OcrTextDetail {
   originText?: string;
   // 人物配音角色标识（微软 TTS 角色）
   voiceRole?: string;
+  // 文本转语音生成状态
+  audioLoading?: boolean;
+  audioUrl?: string | null;
+  audioError?: string | null;
   minX: number;
   minY: number;
   maxX: number;
