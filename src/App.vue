@@ -72,6 +72,9 @@
           </div>
         </div>
       </div>
+
+      <!-- 裁剪预览 -->
+      <CropPreview :image="cropPreviewImage" @close="cropPreviewImage = null" />
     </div>
 
     <!-- 设置对话框 -->
@@ -96,6 +99,7 @@ import ImageList from "./components/ImageList.vue";
 import TextResultList from "./components/TextResultList.vue";
 import SettingsPanel from "./components/SettingsPanel.vue";
 import BottomToolbar from "./components/BottomToolbar.vue";
+import CropPreview from "./components/CropPreview.vue";
 import { canvasEventBus } from "./core/event-bus";
 import type { OcrTextResult } from "./types/index";
 import { useEdgeTts } from "./composables/useEdgeTts";
@@ -122,6 +126,8 @@ const isTextSidebarCollapsed = ref(false);
 const textSidebarWidth = ref(260);
 // 使用 Edge TTS Hook 提供的播音人列表
 const { voiceRoleOptions, loadVoiceRoleOptions } = useEdgeTts();
+// 裁剪预览图片
+const cropPreviewImage = ref<File | null>(null);
 
 const currentImage = computed(() => ocrStore.currentImage);
 
@@ -239,15 +245,51 @@ const cropImage = async (
   return new Promise((resolve, reject) => {
     const img = new Image();
     img.onload = () => {
+      // 验证坐标和尺寸，确保都是非负数且在图片范围内
+      const imgWidth = img.width;
+      const imgHeight = img.height;
+
+      // 确保坐标非负数
+      const clampedX = Math.max(0, Math.floor(x));
+      const clampedY = Math.max(0, Math.floor(y));
+
+      // 确保宽度和高度为正数，且不超出图片边界
+      const clampedWidth = Math.max(1, Math.min(Math.floor(width), imgWidth - clampedX));
+      const clampedHeight = Math.max(
+        1,
+        Math.min(Math.floor(height), imgHeight - clampedY)
+      );
+
+      // 如果裁剪区域无效，拒绝
+      if (
+        clampedWidth <= 0 ||
+        clampedHeight <= 0 ||
+        clampedX >= imgWidth ||
+        clampedY >= imgHeight
+      ) {
+        reject(new Error("裁剪区域无效：坐标超出图片范围"));
+        return;
+      }
+
       const canvas = document.createElement("canvas");
-      canvas.width = width;
-      canvas.height = height;
+      canvas.width = clampedWidth;
+      canvas.height = clampedHeight;
       const ctx = canvas.getContext("2d");
       if (!ctx) {
         reject(new Error("无法创建画布上下文"));
         return;
       }
-      ctx.drawImage(img, x, y, width, height, 0, 0, width, height);
+      ctx.drawImage(
+        img,
+        clampedX,
+        clampedY,
+        clampedWidth,
+        clampedHeight,
+        0,
+        0,
+        clampedWidth,
+        clampedHeight
+      );
       canvas.toBlob(
         (blob) => {
           if (!blob) {
@@ -301,6 +343,9 @@ const handleWaitingRectComplete = async (rect: {
       imageCoords.width,
       imageCoords.height
     );
+
+    // 显示裁剪预览
+    cropPreviewImage.value = croppedFile;
 
     // 提交 OCR 识别请求（结果通过 imageId 绑定到对应图片）
     await ocrStore.runOcrTask(
