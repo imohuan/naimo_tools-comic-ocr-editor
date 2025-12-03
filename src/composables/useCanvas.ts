@@ -4,7 +4,7 @@ import * as fabric from "fabric";
 import type { ImageRect } from "../core/canvas-utils";
 import { addImage, addOcrRect } from "../core/canvas-utils";
 import type { OcrTextResult } from "../types";
-import { Badge } from "../core/fabric-shapes";
+import { Badge, Ocr } from "../core/fabric-shapes";
 
 export function useCanvas(
   canvasDom: Ref<HTMLCanvasElement | undefined>,
@@ -43,19 +43,25 @@ export function useCanvas(
     imageRect.value = await addImage(fabricCanvas.value, image);
   };
 
+  let isLoadingOcrBoxes = false;
   const loadOcrBoxes = (ocrResult: OcrTextResult | null) => {
     if (!fabricCanvas.value || !ocrResult) return;
+
+    // 防止重复调用
+    if (isLoadingOcrBoxes) {
+      return;
+    }
+
+    isLoadingOcrBoxes = true;
 
     try {
       // 清除现有的OCR框（使用相同的清除逻辑）
       const objectsToRemove: fabric.Object[] = [];
       fabricCanvas.value.forEachObject((obj: fabric.Object) => {
-        // 多种方式识别 Badge 对象
-        // Badge 对象有 text 属性，图片对象没有
-        const hasTextProperty = (obj as any).text !== undefined;
         const isBadgeType = obj.type === "Badge" || obj instanceof Badge;
+        const isOcrType = obj.type === "Ocr" || obj instanceof Ocr;
 
-        if (isBadgeType || (hasTextProperty && obj.type !== "image")) {
+        if (isBadgeType || isOcrType) {
           objectsToRemove.push(obj);
         }
       });
@@ -73,6 +79,11 @@ export function useCanvas(
       }
     } catch (error) {
       console.error("加载OCR框时出错:", error);
+    } finally {
+      // 使用 nextTick 确保在渲染完成后重置标志
+      setTimeout(() => {
+        isLoadingOcrBoxes = false;
+      }, 0);
     }
   };
 
@@ -89,12 +100,10 @@ export function useCanvas(
     // 只清除OCR框（Badge类型的对象），保留图片
     const objectsToRemove: fabric.Object[] = [];
     fabricCanvas.value.forEachObject((obj: fabric.Object) => {
-      // 多种方式识别 Badge 对象
-      // Badge 对象有 text 属性，图片对象没有
-      const hasTextProperty = (obj as any).text !== undefined;
       const isBadgeType = obj.type === "Badge" || obj instanceof Badge;
+      const isOcrType = obj.type === "Ocr" || obj instanceof Ocr;
 
-      if (isBadgeType || (hasTextProperty && obj.type !== "image")) {
+      if (isBadgeType || isOcrType) {
         objectsToRemove.push(obj);
       }
     });

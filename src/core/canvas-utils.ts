@@ -2,7 +2,7 @@ import * as fabric from "fabric";
 import type { Canvas as ICanvas, Image as IImage } from "fabric";
 import type { OcrTextResult } from "../types";
 import { isString } from "lodash-es";
-import { Badge } from "./fabric-shapes";
+import { Badge, Ocr } from "./fabric-shapes";
 
 export interface ImageRect {
   x: number;
@@ -95,17 +95,28 @@ export function addOcrRect(
     x += canvasOffset.x;
     y += canvasOffset.y;
 
+    const accentColor = "#6366F1";
+    const rect = new Ocr({
+      left: x,
+      top: y,
+      width: w,
+      height: h,
+      selectable: false,
+      accentColor,
+    });
+
     const badge = new Badge({
       left: x,
       top: y,
       width: w,
       height: h,
-      fill: "rgba(255, 0, 0, 0.1)",
-      stroke: "#ff0000",
-      strokeWidth: 2,
+      fill: "rgba(0,0,0,0)",
+      stroke: "transparent",
       selectable: false,
     } as any);
     (badge as any).text = index + 1;
+
+    canvas.add(rect);
     canvas.add(badge);
   });
 

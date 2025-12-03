@@ -133,7 +133,11 @@
         :disabled="!hasImage"
         :shortcut="waitingModeShortcut"
         :title="isWaitingMode ? '关闭等待识别框模式' : '开启等待识别框模式'"
-        :class="isWaitingMode ? 'bg-blue-500 text-white hover:bg-blue-600' : ''"
+        :class="
+          isWaitingMode
+            ? 'bg-blue-600! text-white hover:bg-blue-700! shadow-lg'
+            : 'hover:bg-blue-50'
+        "
         @click="handleToggleWaitingMode"
       >
         <svg

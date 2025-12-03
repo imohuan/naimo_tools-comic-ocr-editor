@@ -8,4 +8,10 @@ export type CanvasEvents = {
   "canvas:clear": void;
 };
 
+export type UiEvents = {
+  "ui:image-list-toggle": void;
+};
+
 export const canvasEventBus = mitt<CanvasEvents>();
+
+export const uiEventBus = mitt<UiEvents>();

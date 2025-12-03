@@ -1,7 +1,7 @@
 <template>
   <button
     :class="[
-      'w-9 h-9 flex items-center justify-center bg-gray-100 rounded-lg cursor-pointer transition-all text-gray-700 hover:bg-gray-200 hover:scale-105 disabled:opacity-50 disabled:cursor-not-allowed relative',
+      'w-9 h-9 flex items-center justify-center bg-gray-100 rounded-lg cursor-pointer transition-all text-gray-700 hover:bg-gray-200 hover:scale-105 disabled:opacity-50 disabled:cursor-not-allowed relative outline-none',
       customClass,
     ]"
     :disabled="disabled"
@@ -12,7 +12,7 @@
     <!-- 快捷键提示 -->
     <span
       v-if="shortcut"
-      class="absolute -bottom-1 -right-1 text-[9px] font-bold leading-none text-white bg-gray-800 border border-gray-900 rounded px-1 py-0.5 font-mono shadow-lg z-10 min-w-[14px] text-center"
+      class="absolute -bottom-1 -right-1 text-[9px] font-bold leading-none text-white bg-gray-800 rounded px-1 py-0.5 font-mono shadow-lg z-10 min-w-[14px] text-center"
     >
       {{ shortcutText }}
     </span>

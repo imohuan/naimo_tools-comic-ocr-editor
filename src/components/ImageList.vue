@@ -156,7 +156,8 @@
 </template>
 
 <script setup lang="ts">
-import { ref } from "vue";
+import { ref, onMounted, onUnmounted } from "vue";
+import { uiEventBus } from "../core/event-bus";
 import type { ImageItem } from "../types";
 
 interface Props {
@@ -181,6 +182,14 @@ const isCollapsed = ref(false);
 const toggleCollapse = () => {
   isCollapsed.value = !isCollapsed.value;
 };
+
+onMounted(() => {
+  uiEventBus.on("ui:image-list-toggle", toggleCollapse);
+});
+
+onUnmounted(() => {
+  uiEventBus.off("ui:image-list-toggle", toggleCollapse);
+});
 
 const handleUploadClick = () => {
   fileInput.value?.click();

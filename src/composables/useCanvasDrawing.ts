@@ -1,10 +1,21 @@
 import { type Ref, ref } from "vue";
 import { useKeyModifier } from "@vueuse/core";
 import * as fabric from "fabric";
-import { Ocr } from "../core/fabric-shapes";
+import { WaitingRect } from "../core/fabric-shapes";
 
-export interface WaitingRect {
-  rect: fabric.Rect;
+const WAITING_RECT_STYLE = {
+  fill: "rgba(99, 102, 241, 0.08)",
+  stroke: "#6366F1",
+  strokeDashArray: [14, 10] as number[],
+  strokeWidth: 2,
+  rx: 8,
+  ry: 8,
+  label: "等待识别",
+  accentColor: "#6366F1",
+};
+
+export interface WaitingRectInfo {
+  rect: WaitingRect;
   canvasX: number;
   canvasY: number;
   canvasWidth: number;
@@ -13,7 +24,14 @@ export interface WaitingRect {
 
 export function useCanvasDrawing(
   fabricCanvas: Ref<any>,
-  imageRect: Ref<{ x: number; y: number; w: number; h: number; ow: number; oh: number }>
+  imageRect: Ref<{
+    x: number;
+    y: number;
+    w: number;
+    h: number;
+    ow: number;
+    oh: number;
+  }>
 ) {
   const shiftKey = useKeyModifier("Shift");
   const isWaitingMode = ref(false);
@@ -21,8 +39,8 @@ export function useCanvasDrawing(
   let isDrawingWaiting = false;
   let startPoint = { x: 0, y: 0 };
   let currentOcrRect: fabric.Rect | null = null;
-  let currentWaitingRect: Ocr | null = null;
-  let waitingRects: WaitingRect[] = [];
+  let currentWaitingRect: WaitingRect | null = null;
+  let waitingRects: WaitingRectInfo[] = [];
 
   const handleMouseDown = (opt: any) => {
     if (!fabricCanvas.value) return;
@@ -37,15 +55,13 @@ export function useCanvasDrawing(
       isDrawingWaiting = true;
       const pointer = fabricCanvas.value.getPointer(e);
       startPoint = { x: pointer.x, y: pointer.y };
-      currentWaitingRect = new Ocr({
+      currentWaitingRect = new WaitingRect({
         left: pointer.x,
         top: pointer.y,
         width: 0,
         height: 0,
-        fill: "rgba(0, 123, 255, 0.1)",
-        stroke: "#007bff",
-        strokeWidth: 2,
         selectable: false,
+        ...WAITING_RECT_STYLE,
       });
       fabricCanvas.value.add(currentWaitingRect);
       e.preventDefault();
@@ -108,14 +124,14 @@ export function useCanvasDrawing(
     }
   };
 
-  const handleMouseUp = (callback?: (rect: WaitingRect) => void) => {
+  const handleMouseUp = (callback?: (rect: WaitingRectInfo) => void) => {
     if (!fabricCanvas.value) return;
 
     // 等待识别框模式
     if (isDrawingWaiting && currentWaitingRect) {
       const { width, height, left, top } = currentWaitingRect;
       if (width > 10 && height > 10) {
-        const waitingRect: WaitingRect = {
+        const waitingRect: WaitingRectInfo = {
           rect: currentWaitingRect,
           canvasX: left,
           canvasY: top,
@@ -148,21 +164,25 @@ export function useCanvasDrawing(
     }
   };
 
-  const setupDrawing = (onWaitingRectComplete?: (rect: WaitingRect) => void) => {
+  const setupDrawing = (
+    onWaitingRectComplete?: (rect: WaitingRectInfo) => void
+  ) => {
     if (!fabricCanvas.value) return;
 
     fabricCanvas.value.on("mouse:down", handleMouseDown);
     fabricCanvas.value.on("mouse:move", handleMouseMove);
-    fabricCanvas.value.on("mouse:up", () => handleMouseUp(onWaitingRectComplete));
+    fabricCanvas.value.on("mouse:up", () =>
+      handleMouseUp(onWaitingRectComplete)
+    );
   };
 
   const setWaitingMode = (enabled: boolean) => {
     isWaitingMode.value = enabled;
   };
 
-  const removeWaitingRect = (rect: WaitingRect) => {
+  const removeWaitingRect = (rect: WaitingRectInfo) => {
     if (!fabricCanvas.value) return;
-    if (rect.rect instanceof Ocr) {
+    if (rect.rect instanceof WaitingRect) {
       rect.rect.stopAnimation();
     }
     fabricCanvas.value.remove(rect.rect);
@@ -176,7 +196,7 @@ export function useCanvasDrawing(
   const clearAllWaitingRects = () => {
     if (!fabricCanvas.value) return;
     waitingRects.forEach((rect) => {
-      if (rect.rect instanceof Ocr) {
+      if (rect.rect instanceof WaitingRect) {
         rect.rect.stopAnimation();
       }
       fabricCanvas.value.remove(rect.rect);

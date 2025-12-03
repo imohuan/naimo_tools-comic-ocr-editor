@@ -1,14 +1,22 @@
 <template>
   <n-config-provider :theme-overrides="themeOverrides">
     <div class="flex h-screen overflow-hidden bg-gray-50">
-      <!-- 左侧图片列表 -->
-      <ImageList
-        :images="imageList"
-        :current-index="currentIndex"
-        @add-images="handleAddImages"
-        @select="handleSelectImage"
-        @remove="handleRemoveImage"
-      />
+      <!-- 左侧菜单切换 -->
+      <div class="flex h-full bg-white">
+        <SidebarTabs
+          :tabs="sidebarTabs"
+          :active-tab="activeSidebarTab"
+          @change="handleSidebarTabChange"
+        />
+        <ImageList
+          v-if="activeSidebarTab === 'images'"
+          :images="imageList"
+          :current-index="currentIndex"
+          @add-images="handleAddImages"
+          @select="handleSelectImage"
+          @remove="handleRemoveImage"
+        />
+      </div>
 
       <!-- 中间画布区域 -->
       <div class="flex-1 flex flex-col relative bg-gray-50 w-full">
@@ -21,6 +29,8 @@
             :waiting-mode="isWaitingMode"
             @change-detail="handleChangeDetail"
             @waiting-rect-complete="handleWaitingRectComplete"
+            @delete-detail="handleDeleteDetail"
+            @re-ocr-detail="handleReOcrDetail"
           />
         </div>
 
@@ -56,13 +66,15 @@
 
 <script setup lang="ts">
 import { ref, computed, onMounted, onUnmounted, nextTick } from "vue";
+import { useEventListener } from "@vueuse/core";
 import { NConfigProvider, NModal } from "naive-ui";
 import Canvas from "./components/Canvas.vue";
 import ImageList from "./components/ImageList.vue";
 import SettingsPanel from "./components/SettingsPanel.vue";
 import BottomToolbar from "./components/BottomToolbar.vue";
+import SidebarTabs from "./components/SidebarTabs.vue";
 import { useOcr } from "./composables/useOcr.js";
-import { canvasEventBus } from "./core/event-bus";
+import { canvasEventBus, uiEventBus } from "./core/event-bus";
 import type { ImageItem, OcrTextResult } from "./types/index";
 
 const themeOverrides = {
@@ -72,6 +84,8 @@ const themeOverrides = {
   },
 };
 
+type SidebarTab = "images" | "text";
+
 const canvasRef = ref<InstanceType<typeof Canvas>>();
 const showSettings = ref(false);
 const imageList = ref<ImageItem[]>([]);
@@ -79,6 +93,11 @@ const currentIndex = ref(0);
 const ocrLoading = ref(false);
 const zoomLevel = ref(1);
 const isWaitingMode = ref(false);
+const sidebarTabs: Array<{ key: SidebarTab; label: string }> = [
+  { key: "images", label: "图片" },
+  { key: "text", label: "文本" },
+];
+const activeSidebarTab = ref<SidebarTab>("images");
 
 const currentImage = computed(() => {
   if (imageList.value.length === 0) return null;
@@ -180,6 +199,10 @@ const handleToggleWaitingMode = (enabled: boolean) => {
   isWaitingMode.value = enabled;
 };
 
+const handleSidebarTabChange = (tab: SidebarTab) => {
+  activeSidebarTab.value = tab;
+};
+
 // 裁剪图片
 const cropImage = async (
   imageFile: File,
@@ -220,65 +243,16 @@ const cropImage = async (
   });
 };
 
-// 将 OCR 结果的相对坐标转换为画布坐标
-const convertOcrResultToCanvas = (
-  ocrResult: OcrTextResult,
-  imageCoords: { x: number; y: number; width: number; height: number },
-  canvasRect: { canvasX: number; canvasY: number; canvasWidth: number; canvasHeight: number },
-  imageRect: { x: number; y: number; w: number; h: number; ow: number; oh: number }
-): OcrTextResult => {
-  // OCR 结果的坐标是相对于裁剪后的图片的（像素坐标）
-  // 裁剪后的图片尺寸就是 imageCoords.width 和 imageCoords.height
-  const croppedImageWidth = imageCoords.width;
-  const croppedImageHeight = imageCoords.height;
-
-  // 计算裁剪区域在原图中的位置（原图坐标）
-  const cropXInOriginal = imageCoords.x;
-  const cropYInOriginal = imageCoords.y;
-
-  // 计算画布上裁剪框的尺寸和位置
-  const canvasCropWidth = canvasRect.canvasWidth;
-  const canvasCropHeight = canvasRect.canvasHeight;
-  const canvasCropX = canvasRect.canvasX;
-  const canvasCropY = canvasRect.canvasY;
-
-  // 计算 OCR 结果相对于裁剪后图片的比例，然后映射到画布坐标
-  const details = ocrResult.details.map((detail) => {
-    // OCR 坐标是相对于裁剪后的图片的（像素坐标）
-    // 计算在裁剪后图片中的相对位置（0-1）
-    const relativeX = detail.minX / croppedImageWidth;
-    const relativeY = detail.minY / croppedImageHeight;
-    const relativeWidth = (detail.maxX - detail.minX) / croppedImageWidth;
-    const relativeHeight = (detail.maxY - detail.minY) / croppedImageHeight;
-
-    // 映射到画布坐标
-    const canvasMinX = canvasCropX + relativeX * canvasCropWidth;
-    const canvasMinY = canvasCropY + relativeY * canvasCropHeight;
-    const canvasMaxX = canvasMinX + relativeWidth * canvasCropWidth;
-    const canvasMaxY = canvasMinY + relativeHeight * canvasCropHeight;
-
-    return {
-      ...detail,
-      minX: canvasMinX,
-      minY: canvasMinY,
-      maxX: canvasMaxX,
-      maxY: canvasMaxY,
-    };
-  });
-
-  return {
-    ...ocrResult,
-    details,
-  };
-};
-
 const handleWaitingRectComplete = async (rect: {
   canvasX: number;
   canvasY: number;
   canvasWidth: number;
   canvasHeight: number;
+  waitingRect: any;
 }) => {
-  if (!currentImage.value || !canvasRef.value) return;
+  // 保存当前图片的引用，确保多张图片时对号入座
+  const targetImage = currentImage.value;
+  if (!targetImage || !canvasRef.value) return;
 
   try {
     // 获取图片坐标
@@ -296,7 +270,7 @@ const handleWaitingRectComplete = async (rect: {
 
     // 裁剪图片
     const croppedFile = await cropImage(
-      currentImage.value.file,
+      targetImage.file,
       imageCoords.x,
       imageCoords.y,
       imageCoords.width,
@@ -306,70 +280,26 @@ const handleWaitingRectComplete = async (rect: {
     // 提交 OCR 识别请求
     const ocrResult = await performOcr(croppedFile);
 
-    // 获取图片在画布上的位置信息（需要通过 canvasRef 获取）
-    // 这里我们需要从 useCanvas 中获取 imageRect
-    // 暂时使用 canvasToImageCoords 的反向计算
-    // 实际上我们需要直接访问 imageRect，但为了简化，我们使用另一种方法
-    
-    // 由于 OCR 结果的坐标是相对于裁剪后的图片的，我们需要将其转换为画布坐标
-    // 裁剪后的图片尺寸就是 imageCoords.width 和 imageCoords.height
-    // 画布上裁剪框的尺寸就是 rect.canvasWidth 和 rect.canvasHeight
-    
-    const details = ocrResult.details.map((detail) => {
-      // OCR 坐标是相对于裁剪后的图片的（像素坐标）
-      const croppedImageWidth = imageCoords.width;
-      const croppedImageHeight = imageCoords.height;
+    // OCR结果的坐标是相对于裁剪后的图片的（像素坐标）
+    // 需要转换为原图坐标（像素坐标），因为 loadOcrBoxes 期望原图坐标
+    const croppedImageWidth = imageCoords.width;
+    const croppedImageHeight = imageCoords.height;
 
+    // 将OCR结果从裁剪图片坐标转换为原图坐标
+    const originalImageDetails = ocrResult.details.map((detail) => {
+      // OCR坐标是相对于裁剪后图片的（像素）
       // 计算在裁剪后图片中的相对位置（0-1）
       const relativeX = detail.minX / croppedImageWidth;
       const relativeY = detail.minY / croppedImageHeight;
       const relativeWidth = (detail.maxX - detail.minX) / croppedImageWidth;
       const relativeHeight = (detail.maxY - detail.minY) / croppedImageHeight;
 
-      // 映射到画布坐标
-      const canvasMinX = rect.canvasX + relativeX * rect.canvasWidth;
-      const canvasMinY = rect.canvasY + relativeY * rect.canvasHeight;
-      const canvasMaxX = canvasMinX + relativeWidth * rect.canvasWidth;
-      const canvasMaxY = canvasMinY + relativeHeight * rect.canvasHeight;
-
-      return {
-        ...detail,
-        minX: canvasMinX,
-        minY: canvasMinY,
-        maxX: canvasMaxX,
-        maxY: canvasMaxY,
-      };
-    });
-
-    const canvasOcrResult: OcrTextResult = {
-      ...ocrResult,
-      details,
-    };
-
-    // 合并到现有的 OCR 结果中
-    if (currentImage.value.ocrResult) {
-      currentImage.value.ocrResult.details.push(...canvasOcrResult.details);
-    } else {
-      currentImage.value.ocrResult = canvasOcrResult;
-    }
-
-    // 获取图片在画布上的信息
-    const imageRect = canvasRef.value.imageRect || { x: 0, y: 0, w: 0, h: 0, ow: 0, oh: 0 };
-    
-    // 将画布坐标转换为图片相对坐标（原图坐标）
-    // loadOcrBoxes 期望的坐标是原图坐标
-    const imageRelativeDetails = canvasOcrResult.details.map((detail) => {
-      // 画布坐标 -> 图片相对坐标（0-1）
-      const relativeX = (detail.minX - imageRect.x) / imageRect.w;
-      const relativeY = (detail.minY - imageRect.y) / imageRect.h;
-      const relativeWidth = (detail.maxX - detail.minX) / imageRect.w;
-      const relativeHeight = (detail.maxY - detail.minY) / imageRect.h;
-
       // 转换为原图坐标（像素）
-      const originalMinX = relativeX * imageRect.ow;
-      const originalMinY = relativeY * imageRect.oh;
-      const originalMaxX = originalMinX + relativeWidth * imageRect.ow;
-      const originalMaxY = originalMinY + relativeHeight * imageRect.oh;
+      // 裁剪区域在原图中的位置是 imageCoords.x, imageCoords.y
+      const originalMinX = imageCoords.x + relativeX * croppedImageWidth;
+      const originalMinY = imageCoords.y + relativeY * croppedImageHeight;
+      const originalMaxX = originalMinX + relativeWidth * croppedImageWidth;
+      const originalMaxY = originalMinY + relativeHeight * croppedImageHeight;
 
       return {
         ...detail,
@@ -380,22 +310,83 @@ const handleWaitingRectComplete = async (rect: {
       };
     });
 
-    const finalOcrResult: OcrTextResult = {
-      ...ocrResult,
-      details: imageRelativeDetails,
-    };
-
-    // 合并到现有的 OCR 结果中
-    if (currentImage.value.ocrResult) {
-      currentImage.value.ocrResult.details.push(...imageRelativeDetails);
+    // 合并到对应图片的 OCR 结果中（确保图片和结果列表绑定）
+    // 创建新对象避免直接修改，确保 watch 能正确触发
+    if (targetImage.ocrResult) {
+      targetImage.ocrResult = {
+        ...targetImage.ocrResult,
+        details: [...targetImage.ocrResult.details, ...originalImageDetails],
+      };
     } else {
-      currentImage.value.ocrResult = finalOcrResult;
+      targetImage.ocrResult = {
+        ...ocrResult,
+        details: originalImageDetails,
+      };
     }
 
-    // 重新加载 OCR 框
-    canvasRef.value.loadOcrBoxes(currentImage.value.ocrResult);
+    // 删除等待识别框
+    if (rect.waitingRect) {
+      canvasRef.value.removeWaitingRect(rect.waitingRect);
+    }
+
+    // watch 会自动检测到 ocrResult 的变化，调用 loadOcrBoxes 重新绘制
   } catch (error) {
     console.error("等待识别框 OCR 识别失败:", error);
+    // 即使出错也要删除等待框
+    if (rect.waitingRect && canvasRef.value) {
+      canvasRef.value.removeWaitingRect(rect.waitingRect);
+    }
+  }
+};
+
+const handleDeleteDetail = (detailIndex: number) => {
+  const targetImage = currentImage.value;
+  if (!targetImage?.ocrResult) return;
+  const details = targetImage.ocrResult.details.filter(
+    (_detail, index) => index !== detailIndex
+  );
+  targetImage.ocrResult = {
+    ...targetImage.ocrResult,
+    details,
+  };
+};
+
+const handleReOcrDetail = async (detailIndex: number) => {
+  const targetImage = currentImage.value;
+  if (!targetImage?.ocrResult) return;
+  const detail = targetImage.ocrResult.details[detailIndex];
+  if (!detail) return;
+
+  const cropWidth = detail.maxX - detail.minX;
+  const cropHeight = detail.maxY - detail.minY;
+  if (cropWidth <= 0 || cropHeight <= 0) return;
+
+  try {
+    const croppedFile = await cropImage(
+      targetImage.file,
+      detail.minX,
+      detail.minY,
+      cropWidth,
+      cropHeight
+    );
+    const ocrResult = await performOcr(croppedFile);
+    const transformedDetails = ocrResult.details.map((item) => ({
+      ...item,
+      minX: detail.minX + item.minX,
+      minY: detail.minY + item.minY,
+      maxX: detail.minX + item.maxX,
+      maxY: detail.minY + item.maxY,
+    }));
+
+    const nextDetails = [...targetImage.ocrResult.details];
+    nextDetails.splice(detailIndex, 1, ...transformedDetails);
+
+    targetImage.ocrResult = {
+      ...targetImage.ocrResult,
+      details: nextDetails,
+    };
+  } catch (error) {
+    console.error("局部重新识别失败:", error);
   }
 };
 
@@ -415,6 +406,13 @@ onMounted(() => {
 
 onUnmounted(() => {
   canvasEventBus.off("canvas:zoom", updateZoom);
+});
+
+useEventListener(window, "keydown", (event: KeyboardEvent) => {
+  if (event.key !== "Tab") return;
+  event.preventDefault();
+  event.stopPropagation();
+  uiEventBus.emit("ui:image-list-toggle");
 });
 </script>
 

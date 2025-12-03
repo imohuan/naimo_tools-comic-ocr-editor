@@ -26,12 +26,15 @@ const props = withDefaults(defineProps<Props>(), {
 
 const emits = defineEmits<{
   "change-detail": [result: OcrTextResult];
-  "waiting-rect-complete": [rect: {
-    canvasX: number;
-    canvasY: number;
-    canvasWidth: number;
-    canvasHeight: number;
-  }];
+  "waiting-rect-complete": [
+    rect: {
+      canvasX: number;
+      canvasY: number;
+      canvasWidth: number;
+      canvasHeight: number;
+      waitingRect: any;
+    }
+  ];
 }>();
 
 const container = ref<HTMLDivElement>();
@@ -73,16 +76,28 @@ watch(
   }
 );
 
+let ocrResultWatchTimer: number | null = null;
 watch(
   () => props.ocrResult,
-  (ocrResult) => {
+  (ocrResult, oldOcrResult) => {
+    // 避免重复触发：如果引用相同，则不处理
+    if (ocrResult === oldOcrResult) return;
+
+    // 清除之前的定时器，防止重复触发
+    if (ocrResultWatchTimer !== null) {
+      clearTimeout(ocrResultWatchTimer);
+      ocrResultWatchTimer = null;
+    }
+
     if (ocrResult) {
-      // 使用 nextTick 确保在 DOM 更新后执行
-      setTimeout(() => {
+      // 使用防抖，确保不会重复调用
+      ocrResultWatchTimer = window.setTimeout(() => {
         try {
           loadOcrBoxes(ocrResult);
         } catch (error) {
           console.error("加载OCR结果时出错:", error);
+        } finally {
+          ocrResultWatchTimer = null;
         }
       }, 0);
     } else {
@@ -90,7 +105,7 @@ watch(
       clearOcrResults();
     }
   },
-  { deep: true }
+  { flush: "post" }
 );
 
 const handleWaitingRectComplete = (rect: any) => {
@@ -99,6 +114,7 @@ const handleWaitingRectComplete = (rect: any) => {
     canvasY: rect.canvasY,
     canvasWidth: rect.canvasWidth,
     canvasHeight: rect.canvasHeight,
+    waitingRect: rect,
   });
 };
 
