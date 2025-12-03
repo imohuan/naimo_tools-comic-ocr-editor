@@ -1,4 +1,6 @@
 import { watch, onUnmounted, type Ref } from "vue";
+import * as fabric from "fabric";
+import { canvasEventBus } from "../core/event-bus";
 
 export function useCanvasPan(
   fabricCanvas: Ref<any>,
@@ -7,111 +9,58 @@ export function useCanvasPan(
   let isPanning = false;
   let lastPanPoint = { x: 0, y: 0 };
   let isRightMouseDown = false;
-
-  const handleMouseDown = (opt: any) => {
-    if (!fabricCanvas.value) return;
-
-    const e = opt.e as MouseEvent;
-    if (!e) return;
-
-    // 支持 Alt+左键 或 右键拖拽 => 进入平移模式
-    if (e.altKey === true || e.button === 2) {
-      isPanning = true;
-      isRightMouseDown = e.button === 2;
-      lastPanPoint = { x: e.clientX, y: e.clientY };
-      fabricCanvas.value.defaultCursor = "move";
-      // 仅在拖拽时临时关闭 selection，防止出现框选高亮
-      fabricCanvas.value.selection = false;
-      e.preventDefault();
-      e.stopPropagation();
-      return;
-    }
-
-    // 普通左键行为：根据等待模式决定是否允许框选
-    // isWaitingMode === true 时关闭 selection，其余情况开启 selection
-    const disableSelection = isWaitingMode?.value === true;
-    fabricCanvas.value.selection = !disableSelection;
-  };
-
-  const handleMouseMove = (opt: any) => {
-    if (!fabricCanvas.value || !isPanning) return;
-
-    const e = opt.e as MouseEvent;
-    if (!e) return;
-
-    const vpt = fabricCanvas.value.viewportTransform;
-    if (vpt) {
-      vpt[4] += e.clientX - lastPanPoint.x;
-      vpt[5] += e.clientY - lastPanPoint.y;
-      fabricCanvas.value.setViewportTransform(vpt);
-      fabricCanvas.value.requestRenderAll();
-    }
-    lastPanPoint = { x: e.clientX, y: e.clientY };
-    e.preventDefault();
-    e.stopPropagation();
-  };
-
-  const handleMouseUp = (opt: any) => {
-    if (!fabricCanvas.value) return;
-
-    if (isPanning) {
-      // 确保 viewportTransform 被正确设置
-      fabricCanvas.value.setViewportTransform(
-        fabricCanvas.value.viewportTransform
-      );
-    }
-
-    isPanning = false;
-    fabricCanvas.value.defaultCursor = "default";
-
-    // 延迟重置 isRightMouseDown，确保 contextmenu 事件能被正确阻止
-    if (isRightMouseDown) {
-      setTimeout(() => {
-        isRightMouseDown = false;
-      }, 100);
-    } else {
-      isRightMouseDown = false;
-    }
-
-    if (opt?.e) {
-      opt.e.preventDefault();
-      opt.e.stopPropagation();
-    }
-  };
+  let rightClickStartTime: number | null = null;
+  let rightClickMoved = false;
 
   const handleContextMenu = (e: MouseEvent) => {
-    // 始终阻止右键菜单，因为需要右键拖拽功能
+    // 始终阻止浏览器默认右键菜单，右键单击由 mouseup + mitt 触发
     e.preventDefault();
     e.stopPropagation();
     return false;
   };
 
-  // 原生 mousedown 事件处理器，用于处理右键拖拽
+  // 原生 mousedown 事件处理器，用于处理平移（Alt+左键 / 右键拖拽）和 selection
   const handleNativeMouseDown = (e: MouseEvent) => {
     if (!fabricCanvas.value) return;
 
-    // 如果是右键，直接处理拖拽逻辑
-    if (e.button === 2) {
+    // Alt + 左键 或 右键 => 进入平移模式
+    const isAltLeft = e.altKey && e.button === 0;
+    const isRight = e.button === 2;
+    if (isAltLeft || isRight) {
       isPanning = true;
-      isRightMouseDown = true;
+      isRightMouseDown = isRight;
       lastPanPoint = { x: e.clientX, y: e.clientY };
+      // 仅记录右键的点击时间，用于区分点击和拖拽；Alt+左键不参与右键菜单逻辑
+      if (isRight) {
+        rightClickStartTime = Date.now();
+        rightClickMoved = false;
+      }
       fabricCanvas.value.defaultCursor = "move";
       // 仅在拖拽时临时关闭 selection，防止出现框选高亮
       fabricCanvas.value.selection = false;
       e.preventDefault();
       e.stopPropagation();
 
-      // 立即阻止 contextmenu
-      const preventContextMenu = (ev: Event) => {
-        ev.preventDefault();
-        ev.stopPropagation();
-      };
-      if (e.target) {
-        e.target.addEventListener("contextmenu", preventContextMenu, {
-          once: true,
-          capture: true,
-        });
+      // 立即阻止 contextmenu（右键时）
+      if (isRight) {
+        const preventContextMenu = (ev: Event) => {
+          ev.preventDefault();
+          ev.stopPropagation();
+        };
+        if (e.target) {
+          e.target.addEventListener("contextmenu", preventContextMenu, {
+            once: true,
+            capture: true,
+          });
+        }
       }
+      return;
+    }
+
+    // 普通左键行为：根据等待模式决定是否允许框选
+    if (e.button === 0) {
+      const disableSelection = isWaitingMode?.value === true;
+      fabricCanvas.value.selection = !disableSelection;
     }
   };
 
@@ -126,20 +75,53 @@ export function useCanvasPan(
       fabricCanvas.value.setViewportTransform(vpt);
       fabricCanvas.value.requestRenderAll();
     }
+    if (isRightMouseDown) {
+      rightClickMoved = true;
+    }
     lastPanPoint = { x: e.clientX, y: e.clientY };
     e.preventDefault();
     e.stopPropagation();
   };
 
-  // 原生 mouseup 事件处理器，用于处理右键拖拽
+  // 原生 mouseup 事件处理器，用于处理平移结束及右键菜单
   const handleNativeMouseUp = (e: MouseEvent) => {
     if (!fabricCanvas.value) return;
 
-    if (isPanning && e.button === 2) {
-      // 确保 viewportTransform 被正确设置
-      fabricCanvas.value.setViewportTransform(
-        fabricCanvas.value.viewportTransform
-      );
+    // 右键抬起：处理右键拖拽结束 + 短按菜单
+    if (e.button === 2) {
+      // 先完成平移收尾（如果有）
+      if (isPanning) {
+        fabricCanvas.value.setViewportTransform(
+          fabricCanvas.value.viewportTransform
+        );
+      }
+
+      // 右键点击（短按且未明显移动）触发自定义右键菜单
+      if (rightClickStartTime !== null) {
+        const duration = Date.now() - rightClickStartTime;
+        const isClick = duration < 250 && !rightClickMoved;
+        if (isClick) {
+          // 使用 fabric 的 hit-test 根据坐标找到当前点击到的 Ocr 对象
+          let hitTarget: any = null;
+          try {
+            const pointer = fabricCanvas.value.getPointer(e);
+            const point = new fabric.Point(pointer.x, pointer.y);
+            fabricCanvas.value.forEachObject((obj: any) => {
+              if (obj.type === "ocr" && obj.containsPoint(point)) {
+                hitTarget = obj;
+              }
+            });
+          } catch (error) {
+            console.error("计算右键命中对象失败:", error);
+          }
+
+          canvasEventBus.emit("canvas:context-menu", {
+            clientX: e.clientX,
+            clientY: e.clientY,
+            target: hitTarget,
+          });
+        }
+      }
 
       isPanning = false;
       fabricCanvas.value.defaultCursor = "default";
@@ -151,15 +133,26 @@ export function useCanvasPan(
 
       e.preventDefault();
       e.stopPropagation();
+
+      rightClickStartTime = null;
+      rightClickMoved = false;
+      return;
+    }
+
+    // Alt + 左键平移：左键抬起时结束平移
+    if (e.button === 0 && isPanning && !isRightMouseDown) {
+      fabricCanvas.value.setViewportTransform(
+        fabricCanvas.value.viewportTransform
+      );
+      isPanning = false;
+      fabricCanvas.value.defaultCursor = "default";
+      e.preventDefault();
+      e.stopPropagation();
     }
   };
 
   const setupPan = () => {
     if (!fabricCanvas.value) return;
-
-    fabricCanvas.value.on("mouse:down", handleMouseDown);
-    fabricCanvas.value.on("mouse:move", handleMouseMove);
-    fabricCanvas.value.on("mouse:up", handleMouseUp);
 
     // 在画布的所有相关 DOM 元素上监听右键菜单事件
     // Fabric.js 有多个 canvas 元素（lower-canvas 和 upper-canvas）以及容器
@@ -211,10 +204,6 @@ export function useCanvasPan(
 
   const cleanupPan = () => {
     if (!fabricCanvas.value) return;
-
-    fabricCanvas.value.off("mouse:down", handleMouseDown);
-    fabricCanvas.value.off("mouse:move", handleMouseMove);
-    fabricCanvas.value.off("mouse:up", handleMouseUp);
 
     // 移除所有元素上的右键菜单事件监听
     const lowerCanvas = fabricCanvas.value.getElement();

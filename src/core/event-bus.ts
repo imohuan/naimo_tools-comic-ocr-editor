@@ -6,6 +6,12 @@ export type CanvasEvents = {
   "canvas:zoom-reset": void;
   "canvas:zoom": { level: number };
   "canvas:clear": void;
+  // 右键菜单事件：在画布上短按右键松开时触发
+  "canvas:context-menu": {
+    clientX: number;
+    clientY: number;
+    target: any;
+  };
 };
 
 export type SidebarTab = "images" | "text";

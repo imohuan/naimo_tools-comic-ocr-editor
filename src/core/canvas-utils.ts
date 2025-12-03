@@ -101,7 +101,8 @@ export function addOcrRect(
       top: y,
       width: w,
       height: h,
-      selectable: true,
+      // TODO
+      selectable: false,
       accentColor,
       label: String(index + 1),
     });

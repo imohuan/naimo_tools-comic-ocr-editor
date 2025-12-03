@@ -20,6 +20,9 @@ export function useCanvas(
     const canvas = new fabric.Canvas(canvasDom.value, {
       selection: false,
       preserveObjectStacking: true,
+      // 启用右键事件（配合右键菜单、右键拖拽）
+      fireRightClick: true,
+      rightClickMouseDown: true,
     });
 
     if (width.value && height.value) {
