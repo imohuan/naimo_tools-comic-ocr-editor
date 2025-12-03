@@ -4,7 +4,7 @@ import * as fabric from "fabric";
 import type { ImageRect } from "../core/canvas-utils";
 import { addImage, addOcrRect } from "../core/canvas-utils";
 import type { OcrTextResult } from "../types";
-import { Badge, Ocr } from "../core/fabric-shapes";
+import { Ocr } from "../core/fabric-shapes";
 
 export function useCanvas(
   canvasDom: Ref<HTMLCanvasElement | undefined>,
@@ -67,10 +67,9 @@ export function useCanvas(
       // 清除现有的OCR框（使用相同的清除逻辑）
       const objectsToRemove: fabric.Object[] = [];
       fabricCanvas.value.forEachObject((obj: fabric.Object) => {
-        const isBadgeType = obj.type === "Badge" || obj instanceof Badge;
         const isOcrType = obj.type === "Ocr" || obj instanceof Ocr;
 
-        if (isBadgeType || isOcrType) {
+        if (isOcrType) {
           objectsToRemove.push(obj);
         }
       });
@@ -109,10 +108,9 @@ export function useCanvas(
     // 只清除OCR框（Badge类型的对象），保留图片
     const objectsToRemove: fabric.Object[] = [];
     fabricCanvas.value.forEachObject((obj: fabric.Object) => {
-      const isBadgeType = obj.type === "Badge" || obj instanceof Badge;
       const isOcrType = obj.type === "Ocr" || obj instanceof Ocr;
 
-      if (isBadgeType || isOcrType) {
+      if (isOcrType) {
         objectsToRemove.push(obj);
       }
     });

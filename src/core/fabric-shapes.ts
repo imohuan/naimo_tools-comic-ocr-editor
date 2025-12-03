@@ -99,99 +99,96 @@ export class Badge extends fabric.Rect {
   }
 }
 
-// OCR形状 - 用于绘制OCR结果框
+// OCR形状 - 用于绘制OCR结果框（带编号徽标）
 export class Ocr extends fabric.Rect {
   static type = "Ocr";
-  declare scanLineX?: number;
   declare accentColor?: string;
-  private animationId?: number;
-  private startTime?: number;
+  declare label?: string | number;
 
   constructor(options?: EnhancedRectProps) {
-    const { accentColor = DEFAULT_ACCENT_COLOR, ...rectOptions } =
-      options || {};
+    const { accentColor = "#EF4444", label, ...rectOptions } = options || {};
     const defaultOptions: EnhancedRectProps = {
-      fill: hexToRgba(accentColor, 0.06),
+      fill: "rgba(0,0,0,0)",
       stroke: accentColor,
-      strokeWidth: 2,
-      rx: 6,
-      ry: 6,
+      strokeWidth: 2.5,
+      strokeDashArray: [10, 6],
+      rx: 0,
+      ry: 0,
       opacity: 1,
+      objectCaching: false,
     };
     const mergedOptions = defaultsDeep({}, rectOptions, defaultOptions);
     super(mergedOptions);
     this.accentColor = accentColor;
-    this.animateScan();
-  }
-
-  animateScan() {
-    if (this.animationId !== undefined) {
-      cancelAnimationFrame(this.animationId);
-    }
-
-    const obj = this;
-    const duration = 1000;
-
-    const animate = (currentTime: number) => {
-      if (obj.startTime === undefined) {
-        obj.startTime = currentTime;
-      }
-      const elapsed = currentTime - obj.startTime;
-      const progress = Math.min(elapsed / duration, 1);
-
-      const easeInOutQuad =
-        progress < 0.5
-          ? 2 * progress * progress
-          : 1 - Math.pow(-2 * progress + 2, 2) / 2;
-
-      const value = -obj.width + obj.width * 2 * easeInOutQuad;
-      obj.scanLineX = value;
-      obj.dirty = true;
-      obj.setCoords();
-      obj.canvas && obj.canvas.requestRenderAll();
-
-      if (progress < 1) {
-        obj.animationId = requestAnimationFrame(animate);
-      } else {
-        obj.startTime = undefined;
-        obj.animationId = requestAnimationFrame(animate);
-      }
-    };
-
-    this.animationId = requestAnimationFrame(animate);
-  }
-
-  stopAnimation() {
-    if (this.animationId !== undefined) {
-      cancelAnimationFrame(this.animationId);
-      this.animationId = undefined;
-      this.startTime = undefined;
-    }
+    this.label = label;
   }
 
   _render(ctx: CanvasRenderingContext2D) {
-    super._render(ctx);
     ctx.save();
 
+    const accent = this.accentColor || "#EF4444";
+
+    // 绘制自定义虚线边框矩形：
+    // 左上角直角，其余三个角为圆角
     const x = -this.width / 2;
     const y = -this.height / 2;
+    const w = this.width;
+    const h = this.height;
+    const r = 6;
 
-    if (typeof this.scanLineX !== "undefined") {
-      const gradient = ctx.createLinearGradient(
-        this.scanLineX - 10,
-        0,
-        this.scanLineX + 10,
-        0
-      );
-      gradient.addColorStop(0, "transparent");
-      gradient.addColorStop(
-        0.5,
-        hexToRgba(this.accentColor || DEFAULT_ACCENT_COLOR, 0.45)
-      );
-      gradient.addColorStop(1, "transparent");
-      ctx.fillStyle = gradient;
-      ctx.fillRect(x, y, this.width, this.height);
-    }
+    ctx.setLineDash([10, 6]);
+    ctx.lineWidth = 2.5;
+    ctx.strokeStyle = accent;
+    ctx.beginPath();
+    ctx.moveTo(x, y); // 左上直角
+    ctx.lineTo(x + w - r, y); // 顶边到右上圆角前
+    ctx.quadraticCurveTo(x + w, y, x + w, y + r); // 右上圆角
+    ctx.lineTo(x + w, y + h - r); // 右边
+    ctx.quadraticCurveTo(x + w, y + h, x + w - r, y + h); // 右下圆角
+    ctx.lineTo(x + r, y + h); // 底边
+    ctx.quadraticCurveTo(x, y + h, x, y + h - r); // 左下圆角
+    ctx.lineTo(x, y); // 左边回到左上
+    ctx.stroke();
+
+    // 在同一个形状内绘制顶部标签（红色小长方形，带圆角）
+    const [bx, by] = [this.width, this.height].map((m) => m / 2);
+    const labelText = String(this.label ?? "");
+    const paddingX = 8;
+    const labelHeight = 14;
+
+    ctx.font = "600 11px Arial";
+    const textWidth = ctx.measureText(labelText).width;
+    const labelWidth = textWidth + paddingX * 2;
+
+    // 标签略微向左突出一点，贴住矩形左边缘
+    const lx = -bx - 2;
+    const ly = -by - labelHeight + 2;
+    const radius = 3;
+
+    ctx.beginPath();
+    ctx.moveTo(lx + radius, ly);
+    ctx.lineTo(lx + labelWidth - radius, ly);
+    ctx.quadraticCurveTo(lx + labelWidth, ly, lx + labelWidth, ly + radius);
+    ctx.lineTo(lx + labelWidth, ly + labelHeight - radius);
+    ctx.quadraticCurveTo(
+      lx + labelWidth,
+      ly + labelHeight,
+      lx + labelWidth - radius,
+      ly + labelHeight
+    );
+    ctx.lineTo(lx + radius, ly + labelHeight);
+    ctx.quadraticCurveTo(lx, ly + labelHeight, lx, ly + labelHeight - radius);
+    ctx.lineTo(lx, ly + radius);
+    ctx.quadraticCurveTo(lx, ly, lx + radius, ly);
+    ctx.closePath();
+
+    ctx.fillStyle = accent;
+    ctx.fill();
+
+    ctx.fillStyle = "white";
+    ctx.textAlign = "center";
+    ctx.textBaseline = "middle";
+    ctx.fillText(labelText, lx + labelWidth / 2, ly + labelHeight / 2);
 
     ctx.restore();
   }
@@ -204,6 +201,7 @@ export class Ocr extends fabric.Rect {
     return {
       ...obj,
       accentColor: this.accentColor,
+      label: this.label,
     };
   }
 
