@@ -1,5 +1,5 @@
 <template>
-  <div class="space-y-3">
+  <div class="flex flex-col h-full space-y-3">
     <div class="flex flex-col gap-2 text-xs text-gray-500">
       <div class="flex items-center justify-between">
         <div class="flex items-center gap-2">
@@ -19,27 +19,46 @@
           <button
             class="px-2 py-1 rounded border border-gray-200 text-gray-600 hover:bg-gray-100 disabled:opacity-50 disabled:cursor-not-allowed"
             type="button"
-            :disabled="tasks.length === runningCount"
+            :disabled="filteredTasks.length === 0"
             @click="handleClear"
           >
             清空列表
           </button>
         </div>
       </div>
-      <div class="flex items-center gap-2">
-        <button
-          v-for="kindOption in kindFilters"
-          :key="kindOption.value"
-          class="px-2 py-0.5 rounded border text-xs"
-          :class="
-            filterKind === kindOption.value
-              ? 'bg-blue-500 border-blue-500 text-white'
-              : 'bg-white border-gray-200 text-gray-600 hover:bg-gray-50'
-          "
-          @click="filterKind = kindOption.value"
-        >
-          {{ kindOption.label }}
-        </button>
+      <div class="flex items-center gap-4">
+        <div class="flex items-center gap-2">
+          <span class="text-xs text-gray-500">类型:</span>
+          <button
+            v-for="kindOption in kindFilters"
+            :key="kindOption.value"
+            class="px-2 py-0.5 rounded border text-xs"
+            :class="
+              filterKind === kindOption.value
+                ? 'bg-blue-500 border-blue-500 text-white'
+                : 'bg-white border-gray-200 text-gray-600 hover:bg-gray-50'
+            "
+            @click="filterKind = kindOption.value"
+          >
+            {{ kindOption.label }}
+          </button>
+        </div>
+        <div class="flex items-center gap-2">
+          <span class="text-xs text-gray-500">状态:</span>
+          <button
+            v-for="statusOption in statusFilters"
+            :key="statusOption.value"
+            class="px-2 py-0.5 rounded border text-xs"
+            :class="
+              filterStatus === statusOption.value
+                ? 'bg-green-500 border-green-500 text-white'
+                : 'bg-white border-gray-200 text-gray-600 hover:bg-gray-50'
+            "
+            @click="filterStatus = statusOption.value"
+          >
+            {{ statusOption.label }}
+          </button>
+        </div>
       </div>
     </div>
 
@@ -52,7 +71,8 @@
 
     <div
       v-else
-      class="max-h-[420px] overflow-y-auto border border-gray-100 rounded-md divide-y divide-gray-100 bg-white"
+      class="flex-1 overflow-y-auto border border-gray-100 rounded-md divide-y divide-gray-100 bg-white"
+      style="max-height: calc(80vh - 200px)"
     >
       <div
         v-for="task in filteredTasks"
@@ -146,6 +166,7 @@ const pendingCount = computed(
 );
 
 const filterKind = ref<"all" | TaskKind>("all");
+const filterStatus = ref<"all" | "pending" | "running" | "success" | "error" | "cancelled">("all");
 const keyword = ref("");
 
 const kindFilters = [
@@ -154,14 +175,25 @@ const kindFilters = [
   { label: "仅音频", value: "audio" as TaskKind },
 ];
 
+const statusFilters = [
+  { label: "全部状态", value: "all" as const },
+  { label: "等待中", value: "pending" as const },
+  { label: "进行中", value: "running" as const },
+  { label: "已完成", value: "success" as const },
+  { label: "失败", value: "error" as const },
+  { label: "已取消", value: "cancelled" as const },
+];
+
 const filteredTasks = computed(() => {
   return tasks.value.filter((task) => {
     const matchKind =
       filterKind.value === "all" || task.kind === filterKind.value;
+    const matchStatus =
+      filterStatus.value === "all" || task.status === filterStatus.value;
     const matchKeyword = keyword.value
       ? task.label.toLowerCase().includes(keyword.value.toLowerCase())
       : true;
-    return matchKind && matchKeyword;
+    return matchKind && matchStatus && matchKeyword;
   });
 });
 
@@ -200,7 +232,11 @@ const handleStop = (taskId: string) => {
 };
 
 const handleClear = () => {
-  taskStore.clearTasks();
+  // 只清空当前筛选条件下的任务
+  const tasksToClear = filteredTasks.value.map(task => task.id);
+  tasksToClear.forEach(taskId => {
+    taskStore.removeTaskRecord(taskId);
+  });
 };
 </script>
 

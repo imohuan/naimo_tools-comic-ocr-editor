@@ -17,9 +17,7 @@
       </div>
 
       <!-- 中间画布区域 -->
-      <div
-        class="flex-1 flex flex-col relative bg-gray-50 w-full overflow-hidden"
-      >
+      <div class="flex-1 flex flex-col relative bg-gray-50 w-full overflow-hidden">
         <!-- 画布 + 底部控制栏（在画布容器内部居中） -->
         <div class="flex-1 relative overflow-hidden">
           <Canvas
@@ -38,9 +36,7 @@
 
           <!-- 底部控制栏：相对于画布区域绝对定位并水平居中 -->
           <BottomToolbar
-            :current-page="
-              ocrStore.images.length > 0 ? ocrStore.currentIndex + 1 : 0
-            "
+            :current-page="ocrStore.images.length > 0 ? ocrStore.currentIndex + 1 : 0"
             :total-pages="ocrStore.images.length"
             :display-zoom="displayZoom"
             :has-image="!!currentImage"
@@ -88,7 +84,12 @@
       preset="dialog"
       title="设置"
       :show-icon="false"
-      style="width: 1200px"
+      :style="{
+        width: '80vw',
+        height: '80vh',
+        'max-width': '1200px',
+        'max-height': '800px',
+      }"
     >
       <SettingsPanel @close="showSettings = false" />
     </n-modal>
@@ -98,7 +99,12 @@
       v-model:show="showTasks"
       preset="card"
       title="任务列表"
-      :style="{ width: '1040px', 'min-height': '400px' }"
+      :style="{
+        width: '80vw',
+        height: '80vh',
+        'max-width': '1200px',
+        'max-height': '800px',
+      }"
     >
       <TaskListPanel />
     </n-modal>
@@ -118,11 +124,16 @@
         />
       </div>
     </n-modal> -->
-    <div class="fixed inset-0 z-50" v-show="sequencePlayerVisible">
-      <AudioSequencePlayer
-        :model-value="sequencePlayerVisible"
-        :playlist="sequencePlayerPlaylist"
-      />
+    <div
+      class="fixed inset-0 z-50 flex items-center justify-center bg-black/80"
+      v-show="sequencePlayerVisible"
+    >
+      <div class="w-[95vw] h-[90vh] max-w-[1600px] max-h-[900px]">
+        <AudioSequencePlayer
+          :model-value="sequencePlayerVisible"
+          :playlist="sequencePlayerPlaylist"
+        />
+      </div>
     </div>
   </n-config-provider>
 </template>
@@ -304,10 +315,7 @@ const cropImage = async (
       const clampedY = Math.max(0, Math.floor(y));
 
       // 确保宽度和高度为正数，且不超出图片边界
-      const clampedWidth = Math.max(
-        1,
-        Math.min(Math.floor(width), imgWidth - clampedX)
-      );
+      const clampedWidth = Math.max(1, Math.min(Math.floor(width), imgWidth - clampedX));
       const clampedHeight = Math.max(
         1,
         Math.min(Math.floor(height), imgHeight - clampedY)
@@ -418,16 +426,14 @@ const handleWaitingRectComplete = async (rect: {
           const relativeX = detail.minX / croppedImageWidth;
           const relativeY = detail.minY / croppedImageHeight;
           const relativeWidth = (detail.maxX - detail.minX) / croppedImageWidth;
-          const relativeHeight =
-            (detail.maxY - detail.minY) / croppedImageHeight;
+          const relativeHeight = (detail.maxY - detail.minY) / croppedImageHeight;
 
           // 转换为原图坐标（像素）
           // 裁剪区域在原图中的位置是 imageCoords.x, imageCoords.y
           const originalMinX = imageCoords.x + relativeX * croppedImageWidth;
           const originalMinY = imageCoords.y + relativeY * croppedImageHeight;
           const originalMaxX = originalMinX + relativeWidth * croppedImageWidth;
-          const originalMaxY =
-            originalMinY + relativeHeight * croppedImageHeight;
+          const originalMaxY = originalMinY + relativeHeight * croppedImageHeight;
 
           return {
             ...detail,
@@ -553,9 +559,7 @@ onMounted(() => {
   // 监听来自侧边栏的序列播放请求
   uiEventBus.on("sequence-player:open", (payload) => {
     sequencePlayerTitle.value =
-      payload.source === "all-images"
-        ? "全部图片文本音频序列播放"
-        : "文本音频序列播放";
+      payload.source === "all-images" ? "全部图片文本音频序列播放" : "文本音频序列播放";
     sequencePlayerPlaylist.value = payload.playlist;
     sequencePlayerVisible.value = true;
   });

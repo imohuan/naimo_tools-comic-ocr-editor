@@ -1,14 +1,10 @@
 <template>
   <div class="space-y-4 text-sm text-gray-600">
-    <div class="text-xs text-gray-400">
-      调整 OCR、翻译、修复与任务等运行参数
-    </div>
+    <div class="text-xs text-gray-400">调整 OCR、翻译、修复与任务等运行参数</div>
 
     <div class="grid gap-4 md:grid-cols-3 auto-rows-min items-start">
       <!-- 检测配置 -->
-      <div class="col-span-full text-xs font-semibold text-gray-500 mb-1">
-        检测配置
-      </div>
+      <div class="col-span-full text-xs font-semibold text-gray-500 mb-1">检测配置</div>
 
       <label class="flex flex-col gap-1 text-xs text-gray-500">
         <span class="text-[13px] font-medium text-gray-700">检测分辨率</span>
@@ -54,74 +50,77 @@
         />
       </label>
 
-      <label class="flex flex-col gap-1 text-xs text-gray-500">
-        <span class="text-[13px] font-medium text-gray-700">Unclip 比率</span>
-        <input
-          v-model.number="config.detector.unclip_ratio"
-          type="number"
-          step="0.1"
-          min="0"
-          class="w-full rounded-md border border-gray-200 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-400"
-        />
-      </label>
-
-      <!-- 渲染配置 -->
-      <div class="col-span-full mt-2 text-xs font-semibold text-gray-500 mb-1">
-        渲染配置
+      <div class="md:col-span-3 grid gap-4 md:grid-cols-3 auto-rows-min items-start">
+        <label class="flex flex-col gap-1 text-xs text-gray-500">
+          <span class="text-[13px] font-medium text-gray-700">Unclip 比率</span>
+          <input
+            v-model.number="config.detector.unclip_ratio"
+            type="number"
+            step="0.1"
+            min="0"
+            class="w-full rounded-md border border-gray-200 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-400"
+          />
+        </label>
       </div>
 
-      <label class="flex flex-col gap-1 text-xs text-gray-500">
-        <span class="text-[13px] font-medium text-gray-700">渲染方向</span>
-        <select
-          v-model="config.render.direction"
-          class="w-full rounded-md border border-gray-200 bg-white px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-400"
-        >
-          <option
-            v-for="option in directionOptions"
-            :key="option.value"
-            :value="option.value"
+      <!-- 渲染配置和翻译配置并排 -->
+      <!-- 渲染配置 -->
+      <div class="md:col-span-1 mt-2">
+        <div class="text-xs font-semibold text-gray-500 mb-1">渲染配置</div>
+        <label class="flex flex-col gap-1 text-xs text-gray-500">
+          <span class="text-[13px] font-medium text-gray-700">渲染方向</span>
+          <select
+            v-model="config.render.direction"
+            class="w-full rounded-md border border-gray-200 bg-white px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-400"
           >
-            {{ option.label }}
-          </option>
-        </select>
-      </label>
+            <option
+              v-for="option in directionOptions"
+              :key="option.value"
+              :value="option.value"
+            >
+              {{ option.label }}
+            </option>
+          </select>
+        </label>
+      </div>
 
       <!-- 翻译配置 -->
-      <div class="col-span-full mt-2 text-xs font-semibold text-gray-500 mb-1">
-        翻译配置
+      <div class="md:col-span-2 mt-2">
+        <div class="text-xs font-semibold text-gray-500 mb-1">翻译配置</div>
+        <div class="grid gap-4 md:grid-cols-2">
+          <label class="flex flex-col gap-1 text-xs text-gray-500">
+            <span class="text-[13px] font-medium text-gray-700">翻译器</span>
+            <select
+              v-model="config.translator.translator"
+              class="w-full rounded-md border border-gray-200 bg-white px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-400"
+            >
+              <option
+                v-for="option in translatorOptions"
+                :key="option.value"
+                :value="option.value"
+              >
+                {{ option.label }}
+              </option>
+            </select>
+          </label>
+
+          <label class="flex flex-col gap-1 text-xs text-gray-500">
+            <span class="text-[13px] font-medium text-gray-700">目标语言</span>
+            <select
+              v-model="config.translator.target_lang"
+              class="w-full rounded-md border border-gray-200 bg-white px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-400"
+            >
+              <option
+                v-for="option in targetLangOptions"
+                :key="option.value"
+                :value="option.value"
+              >
+                {{ option.label }}
+              </option>
+            </select>
+          </label>
+        </div>
       </div>
-
-      <label class="flex flex-col gap-1 text-xs text-gray-500">
-        <span class="text-[13px] font-medium text-gray-700">翻译器</span>
-        <select
-          v-model="config.translator.translator"
-          class="w-full rounded-md border border-gray-200 bg-white px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-400"
-        >
-          <option
-            v-for="option in translatorOptions"
-            :key="option.value"
-            :value="option.value"
-          >
-            {{ option.label }}
-          </option>
-        </select>
-      </label>
-
-      <label class="flex flex-col gap-1 text-xs text-gray-500">
-        <span class="text-[13px] font-medium text-gray-700">目标语言</span>
-        <select
-          v-model="config.translator.target_lang"
-          class="w-full rounded-md border border-gray-200 bg-white px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-400"
-        >
-          <option
-            v-for="option in targetLangOptions"
-            :key="option.value"
-            :value="option.value"
-          >
-            {{ option.label }}
-          </option>
-        </select>
-      </label>
 
       <!-- 修复配置 -->
       <div class="col-span-full mt-2 text-xs font-semibold text-gray-500 mb-1">
@@ -177,9 +176,7 @@
       </div>
 
       <div class="col-span-full space-y-2">
-        <div class="mb-1 text-[13px] font-medium text-gray-700">
-          音频并发数量
-        </div>
+        <div class="mb-1 text-[13px] font-medium text-gray-700">音频并发数量</div>
         <p class="text-[11px] text-gray-400 mb-1">
           并发越高占用越大，请根据机器性能合理选择
         </p>
@@ -203,9 +200,7 @@
     </div>
 
     <!-- 底部操作区域：右下角对齐 -->
-    <div
-      class="pt-4 mt-2 border-t border-dashed border-gray-200 flex justify-end gap-2"
-    >
+    <div class="pt-4 mt-2 border-t border-dashed border-gray-200 flex justify-end gap-2">
       <button
         type="button"
         class="px-4 py-2 rounded-md border border-gray-200 text-gray-600 hover:bg-gray-50 transition-colors"
