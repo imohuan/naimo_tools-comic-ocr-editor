@@ -51,7 +51,6 @@
         v-show="showControls"
         class="absolute bottom-0 left-0 right-0 z-10 flex flex-col bg-gradient-to-t from-black/80 via-black/60 to-transparent px-2 pb-1 pt-1"
       >
-        {{ timelineValue }}
         <!-- 时间轴（2px 高度） -->
         <div class="flex items-center gap-3 text-xs text-white/70">
           <div class="flex-1">
@@ -296,6 +295,7 @@ import {
   useDebounceFn,
   useEventListener,
 } from "@vueuse/core";
+import { useSmoothProgress } from "../composables/useSmoothProgress";
 import { NSlider } from "naive-ui";
 import { mergeAudioFiles } from "../utils/audio";
 
@@ -341,6 +341,20 @@ const displayedCurrentTime = computed(() => globalTime.value);
 const timelineValue = ref(0);
 const isDraggingTimeline = ref(false);
 const switchToken = ref(0);
+
+// 使用平滑进度条 hooks
+const {
+  smoothValue: smoothTimelineValue,
+  isSmoothing: isSmoothUpdating,
+  startSmoothing,
+  stopSmoothing,
+  setValue: setSmoothValue,
+  reset: resetSmoothProgress,
+} = useSmoothProgress({
+  interpolationFactor: 0.08, // 提高插值系数，使动画更流畅
+  minDifferenceThreshold: 0.003, // 降低阈值，提高精度
+  resetThreshold: 1.0, // 提高重置阈值，减少不必要的重置
+});
 
 // 视图缩放 / 平移
 const zoom = ref(1);
@@ -440,6 +454,7 @@ const resetPlayerState = () => {
   isPlaying.value = false;
   globalTime.value = 0;
   timelineValue.value = 0;
+  resetSmoothProgress(); // 重置平滑进度条
   switchToken.value++;
   zoom.value = 1;
   panX.value = 0;
@@ -655,16 +670,32 @@ const togglePlay = async () => {
   if (!canPlay.value) return;
   const audio = audioRef.value;
   if (!audio) return;
+
   if (isPlaying.value) {
     audio.pause();
     isPlaying.value = false;
+    // 停止平滑更新，同步到当前实际时间
+    stopSmoothing();
+    const currentTime = audio.currentTime || 0;
+    const [clamped] = getTimeForInfo(currentTime);
+    setSmoothValue(clamped);
+    timelineValue.value = clamped;
     return;
   }
+
   try {
     await audio.play();
     isPlaying.value = true;
+    // 播放开始时立即启动平滑更新
+    const currentTime = audio.currentTime || 0;
+    const [clamped] = getTimeForInfo(currentTime);
+    startSmoothing(clamped, () => {
+      const current = audio.currentTime || 0;
+      return Math.min(current, totalDuration.value);
+    });
   } catch (error) {
     console.warn("无法播放音频", error);
+    isPlaying.value = false;
   }
 };
 
@@ -722,6 +753,7 @@ const seekTo = async (time: number, autoPlay = isPlaying.value) => {
   currentIndex.value = targetIndex;
   globalTime.value = clamped;
   timelineValue.value = clamped;
+  setSmoothValue(clamped); // 同步平滑值
 
   try {
     audio.currentTime = clamped;
@@ -774,6 +806,7 @@ const handleTimelineUpdate = async (value: number | [number, number]) => {
   if (Array.isArray(value)) return;
   isDraggingTimeline.value = true;
   timelineValue.value = value;
+  setSmoothValue(value); // 同步平滑值
   // 支持拖拽时实时预览（Scrubbing）
   await seekTo(value, false);
   handleTimelineChange();
@@ -784,23 +817,26 @@ const handleAudioTimeUpdate = (e: Event) => {
   if (isDraggingTimeline.value) return;
   const audio = audioRef.value;
   if (!audio) return;
+
   const time = audio.currentTime || 0;
   const [clamped, targetIndex] = getTimeForInfo(time);
-  globalTime.value = clamped;
-  if (!isDraggingTimeline.value) {
-    timelineValue.value = globalTime.value;
+
+  // 播放时使用平滑更新，暂停时直接更新
+  if (isPlaying.value) {
+    // 启动平滑更新，提供实时的当前时间获取函数
+    startSmoothing(clamped, () => {
+      const currentTime = audio.currentTime || 0;
+      return Math.min(currentTime, totalDuration.value);
+    });
+  } else {
+    // 暂停时停止平滑更新并直接设置值
+    stopSmoothing();
+    setSmoothValue(clamped);
+    timelineValue.value = clamped;
   }
+
+  globalTime.value = clamped;
   currentIndex.value = targetIndex;
-  console.log(
-    "timeupdate",
-    time,
-    "clamped",
-    clamped,
-    "total",
-    totalDuration.value,
-    "currentIndex",
-    currentIndex.value
-  );
 };
 
 const handleAudioLoadedMetadata = () => {
@@ -818,6 +854,9 @@ const handleAudioEnded = () => {
   isPlaying.value = false;
   globalTime.value = totalDuration.value;
   timelineValue.value = totalDuration.value;
+  // 停止平滑更新并设置最终值
+  stopSmoothing();
+  setSmoothValue(totalDuration.value);
   audio.pause();
 };
 
@@ -929,8 +968,20 @@ watch(currentIndex, () => {
 });
 
 watch(globalTime, (value) => {
-  if (!isDraggingTimeline.value) {
+  if (!isDraggingTimeline.value && !isSmoothUpdating.value) {
     timelineValue.value = value;
+    setSmoothValue(value);
+  }
+});
+
+// 监听平滑值变化，更新 timelineValue 和相关状态
+watch(smoothTimelineValue, (value) => {
+  if (isSmoothUpdating.value && !isDraggingTimeline.value) {
+    timelineValue.value = value;
+    // 同步更新全局时间和当前索引
+    const [clamped, targetIndex] = getTimeForInfo(value);
+    globalTime.value = clamped;
+    currentIndex.value = targetIndex;
   }
 });
 
