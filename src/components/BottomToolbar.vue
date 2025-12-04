@@ -235,7 +235,11 @@
       </ToolbarButton>
 
       <!-- 任务列表按钮 -->
-      <ToolbarButton title="任务列表" @click="handleOpenTasks">
+      <ToolbarButton
+        :shortcut="tasksShortcut"
+        title="任务列表"
+        @click="handleOpenTasks"
+      >
         <svg
           viewBox="0 0 24 24"
           fill="none"
@@ -303,6 +307,7 @@ const waitingModeShortcut = "w";
 const brushModeShortcut = "z";
 const compareShortcut = "c";
 const settingsShortcut = "s";
+const tasksShortcut = "j";
 
 // 实际注册的快捷键（包括不在按钮上显示的）
 const zoomInKeyShortcut = "Ctrl+=";
@@ -404,6 +409,7 @@ onMounted(() => {
   registerShortcut(waitingModeShortcut, handleToggleWaitingMode);
   registerShortcut(compareShortcut, handleToggleCompare);
   registerShortcut(settingsShortcut, handleSettings);
+  registerShortcut(tasksShortcut, handleOpenTasks);
 });
 
 onUnmounted(() => {
@@ -415,6 +421,7 @@ onUnmounted(() => {
   unregisterShortcut(waitingModeShortcut);
   unregisterShortcut(compareShortcut);
   unregisterShortcut(settingsShortcut);
+  unregisterShortcut(tasksShortcut);
 });
 </script>
 
