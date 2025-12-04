@@ -51,11 +51,12 @@
         v-show="showControls"
         class="absolute bottom-0 left-0 right-0 z-10 flex flex-col bg-gradient-to-t from-black/80 via-black/60 to-transparent px-2 pb-1 pt-1"
       >
+        {{ timelineValue }}
         <!-- 时间轴（2px 高度） -->
         <div class="flex items-center gap-3 text-xs text-white/70">
           <div class="flex-1">
             <n-slider
-              v-model:value="timelineValue"
+              :value="timelineValue"
               :min="0"
               :max="Math.max(totalDuration, 0.01)"
               :step="0.01"
@@ -65,7 +66,6 @@
                 '--n-handle-size': '10px',
               }"
               @update:value="handleTimelineUpdate"
-              @change="handleTimelineChange"
             />
           </div>
         </div>
@@ -117,12 +117,7 @@
                 >
                   <path d="M8 5v14l11-7-11-7z" />
                 </svg>
-                <svg
-                  v-else
-                  viewBox="0 0 24 24"
-                  class="h-5 w-5"
-                  fill="currentColor"
-                >
+                <svg v-else viewBox="0 0 24 24" class="h-5 w-5" fill="currentColor">
                   <path d="M7 5h4v14H7zM13 5h4v14h-4z" />
                 </svg>
               </button>
@@ -131,9 +126,7 @@
               <button
                 type="button"
                 class="flex h-8 w-8 items-center justify-center text-white/60 transition hover:text-white disabled:opacity-40 disabled:cursor-not-allowed"
-                :disabled="
-                  currentIndex >= props.playlist.length - 1 || isPreparing
-                "
+                :disabled="currentIndex >= props.playlist.length - 1 || isPreparing"
                 @click="handleNext"
               >
                 <svg
@@ -187,9 +180,7 @@
                   <path d="M15.54 8.46A5 5 0 0 1 17 12a5 5 0 0 1-1.46 3.54" />
                 </svg>
               </button>
-              <div
-                class="absolute bottom-7 left-1/2 -translate-x-1/2 h-2 w-10"
-              ></div>
+              <div class="absolute bottom-7 left-1/2 -translate-x-1/2 h-2 w-10"></div>
 
               <div
                 v-if="showVolumePanel"
@@ -225,9 +216,7 @@
                   {{ playbackRate.toFixed(2).replace(/\.00$/, "") }}x
                 </span>
               </button>
-              <div
-                class="absolute bottom-7 left-1/2 -translate-x-1/2 h-2 w-10"
-              ></div>
+              <div class="absolute bottom-7 left-1/2 -translate-x-1/2 h-2 w-10"></div>
 
               <div
                 v-if="showRatePanel"
@@ -238,11 +227,7 @@
                   :key="rate"
                   type="button"
                   class="flex w-full items-center justify-center px-2 py-1 hover:bg-white/10"
-                  :class="
-                    rate === playbackRate
-                      ? 'text-emerald-400 font-semibold'
-                      : ''
-                  "
+                  :class="rate === playbackRate ? 'text-emerald-400 font-semibold' : ''"
                   @click="playbackRate = rate"
                 >
                   {{ rate }}x
@@ -292,20 +277,25 @@
       </div>
     </div>
 
-    <audio ref="audioRef" class="hidden" preload="auto"></audio>
+    <audio
+      ref="audioRef"
+      class="hidden"
+      preload="auto"
+      @timeupdate="handleAudioTimeUpdate"
+      @ended="handleAudioEnded"
+      @loadedmetadata="handleAudioLoadedMetadata"
+    ></audio>
   </div>
 </template>
 
 <script setup lang="ts">
+import { computed, nextTick, onBeforeUnmount, ref, watch } from "vue";
 import {
-  computed,
-  nextTick,
-  onBeforeUnmount,
-  onMounted,
-  ref,
-  watch,
-} from "vue";
-import { useElementHover, useTimeoutFn } from "@vueuse/core";
+  useElementHover,
+  useTimeoutFn,
+  useDebounceFn,
+  useEventListener,
+} from "@vueuse/core";
 import { NSlider } from "naive-ui";
 import { mergeAudioFiles } from "../utils/audio";
 
@@ -363,14 +353,13 @@ const lastPanY = ref(0);
 // 控制区显隐：悬停时显示，离开 3 秒后隐藏
 const showControls = ref(true);
 const isHoveringCanvas = useElementHover(canvasWrapper);
-const { start: startHideControlsTimer, stop: stopHideControlsTimer } =
-  useTimeoutFn(
-    () => {
-      showControls.value = false;
-    },
-    3000,
-    { immediate: false }
-  );
+const { start: startHideControlsTimer, stop: stopHideControlsTimer } = useTimeoutFn(
+  () => {
+    showControls.value = false;
+  },
+  3000,
+  { immediate: false }
+);
 
 // 用户在画布区域有任何指针活动时，重置 3 秒隐藏计时
 const handleUserActivity = () => {
@@ -430,14 +419,11 @@ const currentItem = computed(() => props.playlist[currentIndex.value] ?? null);
 const currentText = computed(() => currentItem.value?.text ?? "");
 
 const canPlay = computed(() => {
-  return (
-    !isPreparing.value && props.playlist.length > 0 && totalDuration.value > 0
-  );
+  return !isPreparing.value && props.playlist.length > 0 && totalDuration.value > 0;
 });
 
 const canInteractTimeline = computed(() => canPlay.value && !isPreparing.value);
 
-const durationCache = new Map<string, number>();
 const imageCache = new Map<string, HTMLImageElement>();
 
 const resetPlayerState = () => {
@@ -469,41 +455,6 @@ const formatTime = (input: number) => {
     .toString()
     .padStart(2, "0");
   return `${minutes}:${seconds}`;
-};
-
-const loadAudioDuration = (url: string): Promise<number> => {
-  if (durationCache.has(url)) {
-    return Promise.resolve(durationCache.get(url) || 0);
-  }
-
-  return new Promise((resolve) => {
-    const audio = document.createElement("audio");
-    audio.preload = "metadata";
-    audio.src = url;
-
-    const cleanup = () => {
-      audio.removeEventListener("loadedmetadata", handleLoaded);
-      audio.removeEventListener("error", handleError);
-    };
-
-    const finish = (duration: number) => {
-      durationCache.set(url, duration);
-      cleanup();
-      resolve(duration);
-    };
-
-    const handleLoaded = () => {
-      const duration = Number.isFinite(audio.duration) ? audio.duration : 0;
-      finish(duration);
-    };
-
-    const handleError = () => {
-      finish(0);
-    };
-
-    audio.addEventListener("loadedmetadata", handleLoaded, { once: true });
-    audio.addEventListener("error", handleError, { once: true });
-  });
 };
 
 const ensureImage = (url: string): Promise<HTMLImageElement> => {
@@ -560,10 +511,7 @@ const drawFrame = async () => {
 
   try {
     const img = await ensureImage(item.image);
-    const baseScale = Math.min(
-      width / item.imageWidth,
-      height / item.imageHeight
-    );
+    const baseScale = Math.min(width / item.imageWidth, height / item.imageHeight);
     const scale = baseScale * zoom.value;
     const drawWidth = item.imageWidth * scale;
     const drawHeight = item.imageHeight * scale;
@@ -572,10 +520,8 @@ const drawFrame = async () => {
 
     ctx.drawImage(img, offsetX, offsetY, drawWidth, drawHeight);
 
-    const rectWidth =
-      (item.rect.maxX - item.rect.minX) * baseScale * zoom.value;
-    const rectHeight =
-      (item.rect.maxY - item.rect.minY) * baseScale * zoom.value;
+    const rectWidth = (item.rect.maxX - item.rect.minX) * baseScale * zoom.value;
+    const rectHeight = (item.rect.maxY - item.rect.minY) * baseScale * zoom.value;
     const rectX = offsetX + item.rect.minX * baseScale * zoom.value;
     const rectY = offsetY + item.rect.minY * baseScale * zoom.value;
 
@@ -641,11 +587,6 @@ const prepareTimeline = async () => {
   isPreparing.value = true;
   preparationError.value = null;
   try {
-    const results = await Promise.all(
-      props.playlist.map((item) => loadAudioDuration(item.audio))
-    );
-    durations.value = results;
-
     // 额外步骤：将整列音频合并为一个音频文件，供播放器统一播放
     const files: File[] = [];
     for (let i = 0; i < props.playlist.length; i++) {
@@ -666,7 +607,10 @@ const prepareTimeline = async () => {
       throw new Error("未能获取到有效的音频文件");
     }
 
-    const mergedBlob = await mergeAudioFiles(files);
+    const { blob: mergedBlob, durations: mergedDurations } = await mergeAudioFiles(files);
+    console.log("Merged audio durations:", mergedDurations);
+    durations.value = mergedDurations;
+
     if (mergedAudioUrl.value) {
       URL.revokeObjectURL(mergedAudioUrl.value);
     }
@@ -744,12 +688,10 @@ const handleNext = async () => {
   await seekTo(target);
 };
 
-const seekTo = async (time: number, autoPlay = isPlaying.value) => {
-  if (!canPlay.value) return;
-  const audio = audioRef.value;
-  if (!audio) return;
+/** 获取当前时间的索引 */
+const getTimeForInfo = (time: number): [number, number] => {
   const total = totalDuration.value;
-  if (total <= 0) return;
+  if (total <= 0) return [0, 0];
 
   const clamped = Math.min(Math.max(time, 0), total);
   const offsets = clipOffsets.value;
@@ -765,6 +707,18 @@ const seekTo = async (time: number, autoPlay = isPlaying.value) => {
     }
   }
 
+  // console.log("获取INDEX", time, clamped, JSON.stringify(offsets), targetIndex);
+  return [clamped, targetIndex];
+};
+
+const seekTo = async (time: number, autoPlay = isPlaying.value) => {
+  if (!canPlay.value) return;
+  const audio = audioRef.value;
+  if (!audio) return;
+  const total = totalDuration.value;
+  if (total <= 0) return;
+  // 根据目标时间定位到对应片段索引
+  const [clamped, targetIndex] = getTimeForInfo(time);
   currentIndex.value = targetIndex;
   globalTime.value = clamped;
   timelineValue.value = clamped;
@@ -812,42 +766,41 @@ watch(
   { immediate: true }
 );
 
-const handleTimelineUpdate = (value: number | [number, number]) => {
+const handleTimelineChange = useDebounceFn(() => {
+  isDraggingTimeline.value = false;
+}, 1000);
+
+const handleTimelineUpdate = async (value: number | [number, number]) => {
   if (Array.isArray(value)) return;
   isDraggingTimeline.value = true;
   timelineValue.value = value;
+  // 支持拖拽时实时预览（Scrubbing）
+  await seekTo(value, false);
+  handleTimelineChange();
 };
 
-const handleTimelineChange = async (value: number | [number, number]) => {
-  if (Array.isArray(value)) return;
-  isDraggingTimeline.value = false;
-  await seekTo(value);
-};
-
-const handleAudioTimeUpdate = () => {
+const handleAudioTimeUpdate = (e: Event) => {
   if (!canPlay.value) return;
   if (isDraggingTimeline.value) return;
   const audio = audioRef.value;
   if (!audio) return;
-  const current = audio.currentTime || 0;
-  const clamped = Math.min(current, totalDuration.value);
+  const time = audio.currentTime || 0;
+  const [clamped, targetIndex] = getTimeForInfo(time);
   globalTime.value = clamped;
   if (!isDraggingTimeline.value) {
     timelineValue.value = globalTime.value;
   }
-
-  // 根据全局时间反推出当前所在的片段索引
-  const offsets = clipOffsets.value;
-  let targetIndex = offsets.length - 1;
-  for (let i = 0; i < offsets.length; i++) {
-    const start = offsets[i];
-    const end = start + (durations.value[i] ?? 0);
-    if (clamped < end || i === offsets.length - 1) {
-      targetIndex = i;
-      break;
-    }
-  }
   currentIndex.value = targetIndex;
+  console.log(
+    "timeupdate",
+    time,
+    "clamped",
+    clamped,
+    "total",
+    totalDuration.value,
+    "currentIndex",
+    currentIndex.value
+  );
 };
 
 const handleAudioLoadedMetadata = () => {
@@ -915,10 +868,6 @@ const handleKeydown = async (event: KeyboardEvent) => {
   const delta = isLeft ? -KEY_SEEK_STEP : KEY_SEEK_STEP;
   await seekTo(globalTime.value + delta);
 };
-
-onMounted(() => {
-  window.addEventListener("keydown", handleKeydown);
-});
 
 const toggleFullscreen = async () => {
   const wrapper = canvasWrapper.value;
@@ -997,25 +946,13 @@ watch(
   }
 );
 
-watch(
-  () => audioRef.value,
-  (audio, oldAudio) => {
-    oldAudio?.removeEventListener("timeupdate", handleAudioTimeUpdate);
-    oldAudio?.removeEventListener("ended", handleAudioEnded);
-    oldAudio?.removeEventListener("loadedmetadata", handleAudioLoadedMetadata);
-    if (!audio) return;
-    audio.addEventListener("timeupdate", handleAudioTimeUpdate);
-    audio.addEventListener("ended", handleAudioEnded);
-    audio.addEventListener("loadedmetadata", handleAudioLoadedMetadata);
-  }
-);
-
 onBeforeUnmount(() => {
   resetPlayerState();
   window.removeEventListener("mousemove", handleMouseMove);
   window.removeEventListener("mouseup", handleMouseUp);
-  window.removeEventListener("keydown", handleKeydown);
 });
+
+useEventListener(window, "keydown", handleKeydown);
 </script>
 
 <style scoped>
@@ -1125,12 +1062,7 @@ onBeforeUnmount(() => {
   display: flex;
   flex-direction: column;
   gap: 12px;
-  background: linear-gradient(
-    0deg,
-    rgba(0, 0, 0, 0.75),
-    rgba(0, 0, 0, 0.4),
-    transparent
-  );
+  background: linear-gradient(0deg, rgba(0, 0, 0, 0.75), rgba(0, 0, 0, 0.4), transparent);
 }
 
 .asp-control-row {

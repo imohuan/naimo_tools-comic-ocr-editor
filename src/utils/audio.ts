@@ -58,7 +58,7 @@ export const bufferToWave = (abuffer: AudioBuffer, len: number): Blob => {
     pos++;
   }
 
-  return new Blob([buffer], { type: 'audio/wav' });
+  return new Blob([buffer], { type: "audio/wav" });
 
   function setUint16(data: number) {
     view.setUint16(pos, data, true);
@@ -78,9 +78,9 @@ export const bufferToWave = (abuffer: AudioBuffer, len: number): Blob => {
 export const mergeAudioFiles = async (
   files: File[],
   options: MergeAudioOptions = {}
-): Promise<Blob> => {
+): Promise<{ blob: Blob; durations: number[] }> => {
   if (!files || files.length === 0) {
-    throw new Error('音频文件列表为空');
+    throw new Error("音频文件列表为空");
   }
 
   const { onProgress, audioContext, outputChannels = 2 } = options;
@@ -89,7 +89,7 @@ export const mergeAudioFiles = async (
   const AudioCtx: typeof AudioContext =
     (window as any).AudioContext || (window as any).webkitAudioContext;
   if (!AudioCtx) {
-    throw new Error('当前环境不支持 Web Audio API');
+    throw new Error("当前环境不支持 Web Audio API");
   }
 
   const ctx = audioContext ?? new AudioCtx();
@@ -97,6 +97,7 @@ export const mergeAudioFiles = async (
 
   try {
     const audioBuffers: AudioBuffer[] = [];
+    const durations: number[] = [];
 
     // 1. 解码所有文件
     for (let i = 0; i < files.length; i++) {
@@ -104,9 +105,10 @@ export const mergeAudioFiles = async (
       const arrayBuffer = await files[i].arrayBuffer();
       const decodedBuffer = await ctx.decodeAudioData(arrayBuffer);
       audioBuffers.push(decodedBuffer);
+      durations.push(decodedBuffer.duration);
     }
 
-    onProgress?.('正在合并音频数据...');
+    onProgress?.("正在合并音频数据...");
 
     // 2. 计算总长度
     let totalLength = 0;
@@ -138,14 +140,14 @@ export const mergeAudioFiles = async (
       offset += buf.length;
     });
 
-    onProgress?.('正在封装为 WAV 文件...');
+    onProgress?.("正在封装为 WAV 文件...");
 
     // 5. 编码为 WAV Blob
     const wavBlob = bufferToWave(outputBuffer, totalLength);
-    onProgress?.('完成！');
-    return wavBlob;
+    onProgress?.("完成！");
+    return { blob: wavBlob, durations };
   } catch (error: any) {
-    onProgress?.('处理出错: ' + (error?.message ?? '未知错误'));
+    onProgress?.("处理出错: " + (error?.message ?? "未知错误"));
     throw error;
   } finally {
     // 如果是内部新建的 AudioContext，使用后关闭以释放资源
@@ -156,5 +158,3 @@ export const mergeAudioFiles = async (
     }
   }
 };
-
-
