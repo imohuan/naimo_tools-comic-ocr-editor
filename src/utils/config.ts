@@ -19,6 +19,7 @@ const DEFAULT_CONFIG: OcrConfig = {
     inpainting_size: 2048,
   },
   mask_dilation_offset: 30,
+  audio_concurrency: 2,
 };
 
 const STORAGE_KEY = "comic-ocr-config";

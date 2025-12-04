@@ -5,6 +5,7 @@ import { createApp } from "vue";
 import { createPinia } from "pinia";
 import naive from "naive-ui";
 import App from "./App.vue";
+import { useOcrConfigStore } from "./stores/configStore";
 
 // ==================== 热重载 ====================
 if (import.meta.hot) {
@@ -34,4 +35,9 @@ const pinia = createPinia();
 
 app.use(pinia);
 app.use(naive);
-app.mount("#app");
+
+// 提前加载 OCR 配置，并同步音频并发等运行参数
+const configStore = useOcrConfigStore(pinia);
+configStore.loadConfig().finally(() => {
+  app.mount("#app");
+});

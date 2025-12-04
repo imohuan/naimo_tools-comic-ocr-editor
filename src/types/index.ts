@@ -85,4 +85,6 @@ export interface OcrConfig {
     inpainting_size: number;
   };
   mask_dilation_offset: number;
+  // 音频并发数量（任务系统使用），可选字段兼容旧配置
+  audio_concurrency?: number;
 }

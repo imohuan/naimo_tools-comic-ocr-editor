@@ -106,7 +106,7 @@
       <div
         v-for="(image, index) in images"
         :key="index"
-        class="image-item relative border-2 rounded-lg overflow-hidden cursor-pointer transition-all duration-200 group"
+        class="image-item relative border-2 rounded-lg overflow-hidden cursor-pointer transition-all duration-200 group shrink-0"
         :class="[
           isCollapsed
             ? 'hover:scale-105'

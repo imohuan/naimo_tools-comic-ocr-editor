@@ -3,6 +3,7 @@ import { computed, ref } from "vue";
 import { useOcrStore } from "./ocrStore";
 import type { ImageItem, OcrTextDetail, OcrTextResult } from "../types";
 import { useEdgeTts } from "../composables/useEdgeTts";
+import { useNotify } from "../composables/useNotify";
 
 export type TaskKind = "ocr" | "audio";
 export type TaskStatus = "pending" | "running" | "success" | "error" | "cancelled";
@@ -48,6 +49,7 @@ type TaskProgressState = {
 export const useTaskStore = defineStore("task-store", () => {
   const ocrStore = useOcrStore();
   const { generateAudioUrl } = useEdgeTts();
+  const { error: notifyError } = useNotify();
 
   const tasks = ref<TaskItem[]>([]);
   const queues: Record<TaskKind, TaskRunner[]> = {
@@ -312,6 +314,13 @@ export const useTaskStore = defineStore("task-store", () => {
             loading: false,
             error: msg,
           });
+          // 更新对应明细的音频状态
+          updateDetailById(imageId, detailId, (d) => {
+            d.audioLoading = false;
+            d.audioError = msg;
+          });
+          // 使用 Naive UI notify 弹出错误提示
+          notifyError(`音频生成失败：${msg}`);
           if (error?.name !== "AbortError") {
             throw error;
           }

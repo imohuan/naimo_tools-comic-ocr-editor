@@ -226,16 +226,18 @@
 
 <script setup lang="ts">
 import { ref, onMounted } from "vue";
-import { getOcrConfig, saveOcrConfig } from "../utils/config";
 import type { OcrConfig } from "../types";
 import { useTaskStore } from "../stores/taskStore";
+import { useOcrConfigStore } from "../stores/configStore";
 
 const emits = defineEmits<{
   close: [];
 }>();
 
 const taskStore = useTaskStore();
+const configStore = useOcrConfigStore();
 
+// 本地可编辑副本，避免直接修改全局配置
 const config = ref<OcrConfig>({
   detector: {
     detector: "default",
@@ -334,7 +336,11 @@ const audioConcurrencyOptions = [1, 2, 3, 5, 8];
 
 const handleSave = async () => {
   try {
-    await saveOcrConfig(config.value);
+    // 使用全局配置 Store 保存配置，并同步音频并发配置
+    await configStore.saveConfig({
+      ...config.value,
+      audio_concurrency: taskStore.audioConcurrency,
+    });
     emits("close");
   } catch (error) {
     console.error("保存配置失败:", error);
@@ -346,7 +352,16 @@ const handleCancel = () => {
 };
 
 onMounted(async () => {
-  const savedConfig = await getOcrConfig();
-  config.value = savedConfig;
+  // 确保全局配置已加载
+  if (!configStore.config) {
+    await configStore.loadConfig();
+  }
+  if (configStore.config) {
+    // 将全局配置拷贝到本地编辑副本
+    config.value = {
+      ...config.value,
+      ...configStore.config,
+    };
+  }
 });
 </script>

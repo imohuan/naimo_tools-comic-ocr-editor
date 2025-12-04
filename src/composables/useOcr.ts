@@ -1,6 +1,6 @@
 import { ref } from "vue";
-import { getOcrConfig } from "../utils/config";
 import type { OcrTextResult } from "../types";
+import { useOcrConfigStore } from "../stores/configStore";
 
 const BASE_URI = "http://127.0.0.1:5003/";
 
@@ -13,7 +13,11 @@ export function useOcr() {
   ): Promise<OcrTextResult> => {
     isLoading.value = true;
     try {
-      const config = await getOcrConfig();
+      const configStore = useOcrConfigStore();
+      if (!configStore.config) {
+        await configStore.loadConfig();
+      }
+      const config = configStore.config;
       const formData = new FormData();
       formData.append("image", file);
       formData.append("config", JSON.stringify(config));

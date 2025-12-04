@@ -307,6 +307,7 @@ import {
 } from "vue";
 import { useElementHover, useTimeoutFn } from "@vueuse/core";
 import { NSlider } from "naive-ui";
+import { mergeAudioFiles } from "../utils/audio";
 
 export interface SequencePlaybackRect {
   minX: number;
@@ -340,6 +341,7 @@ const canvasRef = ref<HTMLCanvasElement>();
 const audioRef = ref<HTMLAudioElement>();
 
 const durations = ref<number[]>([]);
+const mergedAudioUrl = ref<string | null>(null);
 const currentIndex = ref(0);
 const isPlaying = ref(false);
 const isPreparing = ref(false);
@@ -443,6 +445,10 @@ const resetPlayerState = () => {
   if (audio) {
     audio.pause();
     audio.src = "";
+  }
+  if (mergedAudioUrl.value) {
+    URL.revokeObjectURL(mergedAudioUrl.value);
+    mergedAudioUrl.value = null;
   }
   currentIndex.value = 0;
   isPlaying.value = false;
@@ -585,31 +591,6 @@ const drawFrame = async () => {
   }
 };
 
-const waitForAudioReady = (audio: HTMLAudioElement, token: number) => {
-  if (audio.readyState >= 2) {
-    return Promise.resolve();
-  }
-  return new Promise<void>((resolve) => {
-    const handleReady = () => {
-      cleanup();
-      resolve();
-    };
-    const handleError = () => {
-      cleanup();
-      resolve();
-    };
-    const cleanup = () => {
-      audio.removeEventListener("loadedmetadata", handleReady);
-      audio.removeEventListener("error", handleError);
-    };
-    audio.addEventListener("loadedmetadata", () => {
-      if (token !== switchToken.value) return;
-      handleReady();
-    });
-    audio.addEventListener("error", handleError);
-  });
-};
-
 const handleWheel = (event: WheelEvent) => {
   if (!currentItem.value) return;
   const delta = event.deltaY;
@@ -647,51 +628,13 @@ const handleMouseUp = () => {
   window.removeEventListener("mouseup", handleMouseUp);
 };
 
-const loadClipAtTime = async (
-  index: number,
-  clipTime: number,
-  autoPlay: boolean
-) => {
-  const audio = audioRef.value;
-  if (!audio) return;
-  const item = props.playlist[index];
-  if (!item) return;
-
-  const token = ++switchToken.value;
-  currentIndex.value = index;
-  audio.pause();
-  audio.src = item.audio;
-  audio.load();
-
-  await waitForAudioReady(audio, token);
-  if (token !== switchToken.value) {
-    return;
-  }
-
-  const duration = durations.value[index] ?? audio.duration ?? 0;
-  const safeTime = Math.min(Math.max(clipTime, 0), duration || clipTime || 0);
-  try {
-    audio.currentTime = safeTime;
-  } catch {
-    audio.currentTime = 0;
-  }
-
-  if (autoPlay) {
-    try {
-      await audio.play();
-      isPlaying.value = true;
-    } catch (error) {
-      console.warn("音频播放失败", error);
-      isPlaying.value = false;
-    }
-  }
-
-  await drawFrame();
-};
-
 const prepareTimeline = async () => {
   if (!props.playlist.length) {
     durations.value = [];
+    if (mergedAudioUrl.value) {
+      URL.revokeObjectURL(mergedAudioUrl.value);
+      mergedAudioUrl.value = null;
+    }
     return;
   }
 
@@ -702,10 +645,47 @@ const prepareTimeline = async () => {
       props.playlist.map((item) => loadAudioDuration(item.audio))
     );
     durations.value = results;
+
+    // 额外步骤：将整列音频合并为一个音频文件，供播放器统一播放
+    const files: File[] = [];
+    for (let i = 0; i < props.playlist.length; i++) {
+      const url = props.playlist[i]?.audio;
+      if (!url) continue;
+      const response = await fetch(url);
+      if (!response.ok) {
+        throw new Error(`获取音频失败: ${response.status}`);
+      }
+      const blob = await response.blob();
+      const file = new File([blob], `segment-${i}.wav`, {
+        type: blob.type || "audio/wav",
+      });
+      files.push(file);
+    }
+
+    if (!files.length) {
+      throw new Error("未能获取到有效的音频文件");
+    }
+
+    const mergedBlob = await mergeAudioFiles(files);
+    if (mergedAudioUrl.value) {
+      URL.revokeObjectURL(mergedAudioUrl.value);
+    }
+    mergedAudioUrl.value = URL.createObjectURL(mergedBlob);
+
+    const audio = audioRef.value;
+    if (audio && mergedAudioUrl.value) {
+      audio.pause();
+      audio.src = mergedAudioUrl.value;
+      audio.load();
+    }
   } catch (error: any) {
     preparationError.value =
       typeof error?.message === "string" ? error.message : "时间轴准备失败";
     durations.value = [];
+    if (mergedAudioUrl.value) {
+      URL.revokeObjectURL(mergedAudioUrl.value);
+      mergedAudioUrl.value = null;
+    }
   } finally {
     isPreparing.value = false;
   }
@@ -715,7 +695,15 @@ const startPlaybackSession = async () => {
   if (!isActive.value) return;
   if (!props.playlist.length) return;
   await prepareTimeline();
-  await loadClipAtTime(0, 0, false);
+  // 合并音频后从头开始准备播放（不自动播放）
+  const audio = audioRef.value;
+  if (audio) {
+    try {
+      audio.currentTime = 0;
+    } catch {
+      // 忽略设置失败
+    }
+  }
   await drawFrame();
 };
 
@@ -758,10 +746,15 @@ const handleNext = async () => {
 
 const seekTo = async (time: number, autoPlay = isPlaying.value) => {
   if (!canPlay.value) return;
+  const audio = audioRef.value;
+  if (!audio) return;
   const total = totalDuration.value;
   if (total <= 0) return;
+
   const clamped = Math.min(Math.max(time, 0), total);
   const offsets = clipOffsets.value;
+
+  // 根据目标时间定位到对应片段索引
   let targetIndex = offsets.length - 1;
   for (let i = 0; i < offsets.length; i++) {
     const start = offsets[i];
@@ -771,10 +764,29 @@ const seekTo = async (time: number, autoPlay = isPlaying.value) => {
       break;
     }
   }
-  const clipTime = clamped - (offsets[targetIndex] ?? 0);
+
+  currentIndex.value = targetIndex;
   globalTime.value = clamped;
   timelineValue.value = clamped;
-  await loadClipAtTime(targetIndex, clipTime, autoPlay && clamped < total);
+
+  try {
+    audio.currentTime = clamped;
+  } catch {
+    // 忽略设置失败
+  }
+
+  if (autoPlay && clamped < total) {
+    try {
+      await audio.play();
+      isPlaying.value = true;
+    } catch (error) {
+      console.warn("音频播放失败", error);
+      isPlaying.value = false;
+    }
+  } else if (!autoPlay) {
+    audio.pause();
+    isPlaying.value = false;
+  }
 };
 
 // 音量 / 倍速联动 audio 元素
@@ -817,39 +829,43 @@ const handleAudioTimeUpdate = () => {
   if (isDraggingTimeline.value) return;
   const audio = audioRef.value;
   if (!audio) return;
-  const offsets = clipOffsets.value;
-  const base = offsets[currentIndex.value] ?? 0;
-  const current = base + (audio.currentTime || 0);
-  globalTime.value = Math.min(current, totalDuration.value);
+  const current = audio.currentTime || 0;
+  const clamped = Math.min(current, totalDuration.value);
+  globalTime.value = clamped;
   if (!isDraggingTimeline.value) {
     timelineValue.value = globalTime.value;
   }
+
+  // 根据全局时间反推出当前所在的片段索引
+  const offsets = clipOffsets.value;
+  let targetIndex = offsets.length - 1;
+  for (let i = 0; i < offsets.length; i++) {
+    const start = offsets[i];
+    const end = start + (durations.value[i] ?? 0);
+    if (clamped < end || i === offsets.length - 1) {
+      targetIndex = i;
+      break;
+    }
+  }
+  currentIndex.value = targetIndex;
 };
 
 const handleAudioLoadedMetadata = () => {
   const audio = audioRef.value;
   if (!audio) return;
-  const offsets = clipOffsets.value;
-  const base = offsets[currentIndex.value] ?? 0;
-  const current = base + (audio.currentTime || 0);
-  globalTime.value = Math.min(current, totalDuration.value);
-  timelineValue.value = globalTime.value;
+  const current = audio.currentTime || 0;
+  const clamped = Math.min(current, totalDuration.value);
+  globalTime.value = clamped;
+  timelineValue.value = clamped;
 };
 
-const handleAudioEnded = async () => {
+const handleAudioEnded = () => {
   const audio = audioRef.value;
   if (!audio) return;
-  if (currentIndex.value >= props.playlist.length - 1) {
-    isPlaying.value = false;
-    globalTime.value = totalDuration.value;
-    timelineValue.value = totalDuration.value;
-    audio.pause();
-    return;
-  }
-  const shouldContinue = isPlaying.value;
-  const offsets = clipOffsets.value;
-  const target = offsets[currentIndex.value + 1] ?? totalDuration.value;
-  await seekTo(target, shouldContinue);
+  isPlaying.value = false;
+  globalTime.value = totalDuration.value;
+  timelineValue.value = totalDuration.value;
+  audio.pause();
 };
 
 // 键盘快捷键：空格播放 / 暂停，小键盘左右 / 方向键左右 ±0.4s，Ctrl + 左右切换上一段 / 下一段

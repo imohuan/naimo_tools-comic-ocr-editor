@@ -111,16 +111,35 @@ export const useEdgeTts = () => {
       );
 
       // Simple API：synthesize 返回 { audio: Blob, subtitle: WordBoundary[] }
-      const result = await tts.synthesize();
-      if (options?.signal?.aborted) {
-        throw new DOMException("Aborted", "AbortError");
-      }
-      const audioBlob = result.audio;
+      // 增加 3 秒超时控制，防止长时间无响应
+      let timeoutId: ReturnType<typeof setTimeout> | null = null;
+      const timeoutPromise = new Promise<never>((_, reject) => {
+        timeoutId = setTimeout(() => {
+          reject(new Error("生成音频超时，请稍后重试"));
+        }, 3000 * 10);
+      });
 
-      // 创建 URL 但不自动销毁，由调用方管理生命周期
-      const audioUrl = URL.createObjectURL(audioBlob);
-      lastAudioUrl.value = audioUrl;
-      return audioUrl;
+      try {
+        const result = (await Promise.race([
+          tts.synthesize(),
+          timeoutPromise,
+        ])) as Awaited<ReturnType<typeof tts.synthesize>>;
+
+        if (options?.signal?.aborted) {
+          throw new DOMException("Aborted", "AbortError");
+        }
+
+        const audioBlob = result.audio;
+
+        // 创建 URL 但不自动销毁，由调用方管理生命周期
+        const audioUrl = URL.createObjectURL(audioBlob);
+        lastAudioUrl.value = audioUrl;
+        return audioUrl;
+      } finally {
+        if (timeoutId) {
+          clearTimeout(timeoutId);
+        }
+      }
     };
 
     try {
@@ -139,7 +158,9 @@ export const useEdgeTts = () => {
         });
 
         try {
-          return (await Promise.race([runSynthesis(), abortPromise])) as string | undefined;
+          return (await Promise.race([runSynthesis(), abortPromise])) as
+            | string
+            | undefined;
         } finally {
           if (abortHandler) {
             options.signal?.removeEventListener("abort", abortHandler);
