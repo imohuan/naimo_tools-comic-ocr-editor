@@ -378,7 +378,7 @@ import { useOcrStore } from "../stores/ocrStore";
 import { useTaskStore } from "../stores/taskStore";
 import type { ImageItem, OcrTextDetail } from "../types";
 import { getImageDimensions, getImageDimensionsFromUrl } from "../utils/image";
-import { uiEventBus } from "../core/event-bus";
+import { canvasEventBus, uiEventBus } from "../core/event-bus";
 import type { SequencePlaybackItem } from "./AudioSequencePlayer.vue";
 import { useNotify } from "../composables/useNotify";
 import { generateSilentAudio } from "../utils/audio";
@@ -433,6 +433,7 @@ const handleFileChange = (e: Event) => {
 
 const selectImage = (index: number) => {
   store.selectImage(index);
+  canvasEventBus.emit("canvas:zoom-reset");
 };
 
 const removeImage = (index: number) => {

@@ -227,7 +227,6 @@ const loadImageWithOcr = async (
 
   // 通过全局画布事件总线触发缩放重置（居中显示）
   await nextTick();
-  canvasEventBus.emit("canvas:zoom-reset");
 };
 
 watch([() => container.value], () => {
