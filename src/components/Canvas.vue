@@ -32,6 +32,7 @@
 
     <!-- 自定义右键菜单 -->
     <div
+      ref="contextMenuRef"
       v-if="showContextMenu"
       class="fixed z-50 min-w-[180px] rounded-xl border border-indigo-100 bg-white/95 shadow-xl py-2 text-sm text-gray-800 backdrop-blur-sm"
       :style="{ left: contextMenuX + 'px', top: contextMenuY + 'px' }"
@@ -101,6 +102,7 @@
 
 <script setup lang="ts">
 import { ref, watch, computed, onMounted, nextTick, onUnmounted } from "vue";
+import { onClickOutside } from "@vueuse/core";
 import type { OcrTextResult } from "../types";
 import { useCanvas } from "../composables/useCanvas";
 import { useCanvasPan } from "../composables/useCanvasPan";
@@ -149,6 +151,7 @@ const showContextMenu = ref(false);
 const contextMenuX = ref(0);
 const contextMenuY = ref(0);
 const selectedDetailIndex = ref<number | null>(null);
+const contextMenuRef = ref<HTMLDivElement>();
 
 const {
   fabricCanvas,
@@ -340,6 +343,12 @@ onMounted(() => {
   canvasEventBus.on("canvas:pan", handleViewportChange);
   document.addEventListener("mousemove", handleGlobalMouseMove);
   document.addEventListener("mouseup", handleGlobalMouseUp);
+});
+
+onClickOutside(contextMenuRef, () => {
+  if (!showContextMenu.value) return;
+  showContextMenu.value = false;
+  selectedDetailIndex.value = null;
 });
 
 onUnmounted(() => {
