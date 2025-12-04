@@ -364,10 +364,7 @@
         <span>{{ playerLoading ? "准备中" : "播放" }}</span>
       </button>
 
-      <span v-if="playerError" class="ml-3 text-[11px] text-red-500">
-        {{ playerError }}
-      </span>
-    </div>
+          </div>
   </div>
 </template>
 
@@ -385,7 +382,7 @@ import { generateSilentAudio } from "../utils/audio";
 
 const store = useOcrStore();
 const taskStore = useTaskStore();
-const { success: notify } = useNotify();
+const { success: successNotify, error: errorNotify } = useNotify();
 const props = defineProps<{
   isCollapsed: boolean;
 }>();
@@ -518,7 +515,7 @@ const allAudioReady = computed(() => {
 });
 
 const canPlaySequence = computed(() => {
-  return allAudioReady.value && !playerLoading.value;
+  return images.value.length > 0 && !playerLoading.value;
 });
 
 // 解析图片尺寸
@@ -625,18 +622,16 @@ const handleOpenPlayback = async () => {
   try {
     const playlist = await buildGlobalPlaybackPlaylist();
     if (!playlist.length) {
-      throw new Error("暂无可播放的音频");
-    }
-    if (!playlist.every((item) => item.audio)) {
-      throw new Error("存在未生成的音频，无法播放");
+      throw new Error("暂无可播放的内容");
     }
     uiEventBus.emit("sequence-player:open", {
       source: "all-images",
       playlist,
     });
   } catch (error: any) {
-    playerError.value =
+    const errorMessage =
       typeof error?.message === "string" ? error.message : "播放准备失败";
+    errorNotify(errorMessage);
   } finally {
     playerLoading.value = false;
   }
@@ -660,7 +655,7 @@ const handleBatchExecute = () => {
     message = `已添加 ${audioTaskCount} 个音频任务到队列`;
   }
 
-  notify(message);
+  successNotify(message);
 
   if (wantsAudio) {
     if (!wantsOcr) {

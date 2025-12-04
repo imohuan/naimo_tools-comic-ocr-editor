@@ -7,9 +7,7 @@
     <!-- 顶部工具栏 -->
     <div
       class="flex p-2 border-b border-gray-200 gap-2"
-      :class="
-        isCollapsed ? 'flex-col items-center' : 'items-center justify-between'
-      "
+      :class="isCollapsed ? 'flex-col items-center' : 'items-center justify-between'"
     >
       <span v-if="!isCollapsed" class="text-sm font-medium text-gray-700 ml-2"
         >文本结果</span
@@ -110,10 +108,7 @@
           />
         </VueDraggable>
 
-        <div
-          v-else
-          class="h-full flex items-center justify-center text-xs text-gray-400"
-        >
+        <div v-else class="h-full flex items-center justify-center text-xs text-gray-400">
           暂无 OCR 结果
         </div>
       </div>
@@ -124,11 +119,7 @@
       >
         <div
           class="inline-flex items-stretch h-8 rounded-md overflow-hidden"
-          :class="
-            !canBatchRun
-              ? 'bg-gray-300 text-gray-500'
-              : 'bg-blue-500 text-white'
-          "
+          :class="!canBatchRun ? 'bg-gray-300 text-gray-500' : 'bg-blue-500 text-white'"
         >
           <!-- 左侧执行区域 -->
           <button
@@ -184,32 +175,24 @@
 
               <button
                 class="w-full flex items-center justify-between px-2 py-1 rounded hover:bg-gray-100 transition-colors"
-                :class="
-                  batchMode === 'skipDone' ? 'bg-blue-50 text-blue-600' : ''
-                "
+                :class="batchMode === 'skipDone' ? 'bg-blue-50 text-blue-600' : ''"
                 type="button"
                 @click="handleSelectBatchMode('skipDone')"
               >
                 <span>仅未生成音频</span>
-                <span
-                  v-if="batchMode === 'skipDone'"
-                  class="text-blue-500 text-[10px]"
+                <span v-if="batchMode === 'skipDone'" class="text-blue-500 text-[10px]"
                   >当前</span
                 >
               </button>
 
               <button
                 class="w-full flex items-center justify-between px-2 py-1 rounded hover:bg-gray-100 transition-colors"
-                :class="
-                  batchMode === 'forceAll' ? 'bg-blue-50 text-blue-600' : ''
-                "
+                :class="batchMode === 'forceAll' ? 'bg-blue-50 text-blue-600' : ''"
                 type="button"
                 @click="handleSelectBatchMode('forceAll')"
               >
                 <span>强制所有文本生成</span>
-                <span
-                  v-if="batchMode === 'forceAll'"
-                  class="text-blue-500 text-[10px]"
+                <span v-if="batchMode === 'forceAll'" class="text-blue-500 text-[10px]"
                   >当前</span
                 >
               </button>
@@ -232,21 +215,13 @@
             v-if="playerLoading"
             class="w-3 h-3 border-2 border-white/60 border-t-transparent rounded-full animate-spin"
           ></span>
-          <svg
-            v-else
-            class="w-3.5 h-3.5"
-            viewBox="0 0 24 24"
-            fill="currentColor"
-          >
+          <svg v-else class="w-3.5 h-3.5" viewBox="0 0 24 24" fill="currentColor">
             <path d="M8 5v14l11-7z" />
           </svg>
-          <span>{{ playerLoading ? "准备中" : "序列播放" }}</span>
+          <span>{{ playerLoading ? "准备中" : "单图播放" }}</span>
         </button>
 
-        <span v-if="playerError" class="ml-3 text-[11px] text-red-500">
-          {{ playerError }}
-        </span>
-      </div>
+              </div>
     </div>
 
     <!-- 右侧拖拽条 -->
@@ -286,7 +261,7 @@ const { isCollapsed, width } = toRefs(props);
 
 const ocrStore = useOcrStore();
 const taskStore = useTaskStore();
-const { success: notify } = useNotify();
+const { error: errorNotify, success: successNotify } = useNotify();
 const { canUndoDetails, canRedoDetails } = storeToRefs(ocrStore);
 const currentImage = computed(() => ocrStore.currentImage);
 
@@ -354,9 +329,9 @@ watch(
     syncingFromStore.value = true;
     detailsSource.value = (val || []).map((d, index) => ({
       ...(d as any),
-      __key: `${(d as any).id || index}-${d.minX}-${d.minY}-${d.maxX}-${
-        d.maxY
-      }-${d.text}`,
+      __key: `${(d as any).id || index}-${d.minX}-${d.minY}-${d.maxX}-${d.maxY}-${
+        d.text
+      }`,
     }));
     // 下一轮 tick 再允许本地变更同步回 Store，避免本次 watch 触发的变更再次写回
     nextTick(() => {
@@ -369,9 +344,7 @@ watch(
 const canUndo = canUndoDetails;
 const canRedo = canRedoDetails;
 
-const hasDetails = computed(
-  () => detailsSource.value && detailsSource.value.length > 0
-);
+const hasDetails = computed(() => detailsSource.value && detailsSource.value.length > 0);
 
 // 提交当前 detailsSource 到 Pinia（去掉内部 __key 字段）
 const commitToStore = () => {
@@ -486,7 +459,7 @@ const allAudioReady = computed(() => {
 });
 
 const canPlaySequence = computed(() => {
-  return allAudioReady.value && !playerLoading.value;
+  return currentImage.value && !playerLoading.value;
 });
 
 const handleSelectBatchMode = (key: "skipDone" | "forceAll") => {
@@ -496,9 +469,10 @@ const handleSelectBatchMode = (key: "skipDone" | "forceAll") => {
 
 // 计算将要添加的音频任务数量
 const calculateAudioTaskCount = () => {
-  const list = (detailsSource.value as Array<
-    OcrTextDetail & { id?: string; audioLoading?: boolean }
-  >) || [];
+  const list =
+    (detailsSource.value as Array<
+      OcrTextDetail & { id?: string; audioLoading?: boolean }
+    >) || [];
 
   return list.filter((detail) => {
     if (batchMode.value === "skipDone" && detail.audioUrl) return false;
@@ -511,7 +485,7 @@ const handleStartBatchAudio = () => {
 
   // 计算任务数量并显示提示
   const audioTaskCount = calculateAudioTaskCount();
-  notify(`已添加 ${audioTaskCount} 个音频任务到队列`);
+  successNotify(`已添加 ${audioTaskCount} 个音频任务到队列`);
 
   taskStore.startBatchAudioForCurrentImage(batchMode.value);
 };
@@ -558,16 +532,17 @@ const handleOpenPlayback = async () => {
   playerError.value = null;
   try {
     const playlist = await buildPlaybackPlaylist();
-    if (!playlist.every((item) => item.audio)) {
-      throw new Error("存在未生成的音频，无法播放");
+    if (!playlist.length) {
+      throw new Error("暂无可播放的内容");
     }
     uiEventBus.emit("sequence-player:open", {
       source: "current-image",
       playlist,
     });
   } catch (error: any) {
-    playerError.value =
+    const errorMessage =
       typeof error?.message === "string" ? error.message : "播放准备失败";
+    errorNotify(errorMessage);
   } finally {
     playerLoading.value = false;
   }
