@@ -110,13 +110,14 @@ export function useOcr() {
                     details: jsonData.translations.map((trans: any) => {
                       let translatedText = pickText(trans.text, targetLang);
                       // 删除 translatedText 所有标点符号，只保留英文中文数字，其他的内容替换成空格，并且如果出现多个空格的话统一替换成一个空格
-                      translatedText = translatedText.replace(/[^\u4e00-\u9fa5a-zA-Z0-9\s]/g, " ").replace(/\s+/g, " ");
+                      translatedText = translatedText.replace(/[^\u4e00-\u9fa5a-zA-Z0-9\s]/g, " ").replace(/\s+/g, " ").trim();
 
                       const originFromText = pickText(
                         trans.text,
                         undefined,
                         targetLang
                       );
+
                       const originText =
                         trans.origin_text ||
                         trans.source ||
@@ -133,13 +134,15 @@ export function useOcr() {
                         maxY: trans.maxY,
                         textColor: trans.text_color
                           ? {
-                              fg: trans.text_color.fg || [0],
-                              bg: trans.text_color.bg || [255],
-                            }
+                            fg: trans.text_color.fg || [0],
+                            bg: trans.text_color.bg || [255],
+                          }
                           : undefined,
                         language: trans.language,
                         background: trans.background || null,
                       };
+                    }).filter((f: any) => {
+                      return f.text.length > 1
                     }),
                     img: null,
                     detection_size: jsonData.detection_size || 1536,
