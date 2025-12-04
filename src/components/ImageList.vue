@@ -6,9 +6,7 @@
     <!-- 折叠按钮 -->
     <div
       class="flex p-2 border-b border-gray-200 gap-2"
-      :class="
-        isCollapsed ? 'flex-col items-center' : 'items-center justify-between'
-      "
+      :class="isCollapsed ? 'flex-col items-center' : 'items-center justify-between'"
     >
       <span v-if="!isCollapsed" class="text-sm font-medium text-gray-700 ml-2"
         >图片列表</span
@@ -108,9 +106,7 @@
         :key="index"
         class="image-item relative border-2 rounded-lg overflow-hidden cursor-pointer transition-all duration-200 group shrink-0"
         :class="[
-          isCollapsed
-            ? 'hover:scale-105'
-            : 'hover:scale-[1.02] hover:shadow-md',
+          isCollapsed ? 'hover:scale-105' : 'hover:scale-[1.02] hover:shadow-md',
           index === currentIndex ? 'border-blue-600' : 'border-gray-200',
         ]"
         @click="selectImage(index)"
@@ -124,9 +120,7 @@
         ></div>
         <button
           class="remove-btn absolute bg-black/60 border-none rounded-full cursor-pointer flex items-center justify-center opacity-0 transition-opacity duration-200 group-hover:opacity-100 hover:bg-red-600/90"
-          :class="
-            isCollapsed ? 'top-0.5 right-0.5 w-4 h-4' : 'top-1 right-1 w-6 h-6'
-          "
+          :class="isCollapsed ? 'top-0.5 right-0.5 w-4 h-4' : 'top-1 right-1 w-6 h-6'"
           @click.stop="removeImage(index)"
           title="删除"
         >
@@ -154,18 +148,8 @@
             stroke="currentColor"
             stroke-width="2"
           >
-            <circle
-              class="opacity-25"
-              cx="12"
-              cy="12"
-              r="10"
-              stroke="currentColor"
-            />
-            <path
-              class="opacity-75"
-              d="M4 12a8 8 0 018-8"
-              stroke="currentColor"
-            />
+            <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" />
+            <path class="opacity-75" d="M4 12a8 8 0 018-8" stroke="currentColor" />
           </svg>
         </div>
         <div
@@ -229,11 +213,7 @@
       <div
         v-else
         class="inline-flex items-stretch h-8 rounded-md overflow-hidden"
-        :class="
-          !canBatchExecute
-            ? 'bg-gray-300 text-gray-500'
-            : 'bg-blue-500 text-white'
-        "
+        :class="!canBatchExecute ? 'bg-gray-300 text-gray-500' : 'bg-blue-500 text-white'"
       >
         <!-- 左侧执行区域 -->
         <button
@@ -289,44 +269,32 @@
 
             <button
               class="w-full flex items-center justify-between px-2 py-1 rounded hover:bg-gray-100 transition-colors"
-              :class="
-                batchMode === 'skipDone' ? 'bg-blue-50 text-blue-600' : ''
-              "
+              :class="batchMode === 'skipDone' ? 'bg-blue-50 text-blue-600' : ''"
               type="button"
               @click="handleSelectBatchMode('skipDone')"
             >
               <span>仅未完成任务</span>
-              <span
-                v-if="batchMode === 'skipDone'"
-                class="text-blue-500 text-[10px]"
+              <span v-if="batchMode === 'skipDone'" class="text-blue-500 text-[10px]"
                 >当前</span
               >
             </button>
 
             <button
               class="w-full flex items-center justify-between px-2 py-1 rounded hover:bg-gray-100 transition-colors"
-              :class="
-                batchMode === 'forceAll' ? 'bg-blue-50 text-blue-600' : ''
-              "
+              :class="batchMode === 'forceAll' ? 'bg-blue-50 text-blue-600' : ''"
               type="button"
               @click="handleSelectBatchMode('forceAll')"
             >
               <span>强制全部任务</span>
-              <span
-                v-if="batchMode === 'forceAll'"
-                class="text-blue-500 text-[10px]"
+              <span v-if="batchMode === 'forceAll'" class="text-blue-500 text-[10px]"
                 >当前</span
               >
             </button>
 
             <div class="pt-2 mt-1 border-t border-gray-200 space-y-1">
-              <div
-                class="font-medium text-gray-800 flex items-center justify-between"
-              >
+              <div class="font-medium text-gray-800 flex items-center justify-between">
                 <span>执行内容</span>
-                <span
-                  v-if="!hasBatchAction"
-                  class="text-[10px] text-red-500 font-normal"
+                <span v-if="!hasBatchAction" class="text-[10px] text-red-500 font-normal"
                   >至少选择一项</span
                 >
               </div>
@@ -340,9 +308,7 @@
                 <div class="flex flex-col leading-tight text-gray-700">
                   <div class="flex items-center justify-between">
                     <span>执行 OCR</span>
-                    <span
-                      v-if="isBatchOcrSelected"
-                      class="text-blue-500 text-[10px]"
+                    <span v-if="isBatchOcrSelected" class="text-blue-500 text-[10px]"
                       >已启用</span
                     >
                   </div>
@@ -361,9 +327,7 @@
                 <div class="flex flex-col leading-tight text-gray-700">
                   <div class="flex items-center justify-between">
                     <span>执行音频生成</span>
-                    <span
-                      v-if="isBatchAudioSelected"
-                      class="text-blue-500 text-[10px]"
+                    <span v-if="isBatchAudioSelected" class="text-blue-500 text-[10px]"
                       >已启用</span
                     >
                   </div>
@@ -493,9 +457,7 @@ const batchMode = ref<"skipDone" | "forceAll">("skipDone");
 type BatchAction = "ocr" | "audio";
 const batchActions = ref<BatchAction[]>(["ocr"]);
 const isBatchOcrSelected = computed(() => batchActions.value.includes("ocr"));
-const isBatchAudioSelected = computed(() =>
-  batchActions.value.includes("audio")
-);
+const isBatchAudioSelected = computed(() => batchActions.value.includes("audio"));
 const hasBatchAction = computed(() => batchActions.value.length > 0);
 // Popover 显隐
 const batchDropdownVisible = ref(false);
@@ -520,9 +482,7 @@ const handleCheckboxChange = (action: BatchAction, checked: boolean) => {
 const canBatchRun = computed(() => {
   return taskStore.canBatchOcr;
 });
-const canBatchExecute = computed(
-  () => canBatchRun.value && hasBatchAction.value
-);
+const canBatchExecute = computed(() => canBatchRun.value && hasBatchAction.value);
 
 // 序列播放（针对所有图片，仅维护按钮 loading / 错误状态）
 const playerLoading = ref(false);
@@ -602,13 +562,15 @@ const calculateTaskCount = () => {
 };
 
 // 构建「所有图片」的播放列表
-const buildGlobalPlaybackPlaylist = async (): Promise<
-  SequencePlaybackItem[]
-> => {
+const buildGlobalPlaybackPlaylist = async (): Promise<SequencePlaybackItem[]> => {
   const list = (images.value || []) as ImageItem[];
   if (!list.length) {
     throw new Error("当前没有可用图片");
   }
+
+  // 生成 3 秒空白音频
+  const { blob } = await generateSilentAudio(3);
+  const silentAudioUrl = URL.createObjectURL(blob);
 
   const result: SequencePlaybackItem[] = [];
 
@@ -622,10 +584,6 @@ const buildGlobalPlaybackPlaylist = async (): Promise<
 
     // 如果没有 OCR 结果或详情为空，创建一个 3 秒的空白播放项
     if (!image.ocrResult || !image.ocrResult.details?.length) {
-      // 生成 3 秒空白音频
-      const { blob } = await generateSilentAudio(3);
-      const silentAudioUrl = URL.createObjectURL(blob);
-
       result.push({
         image: src,
         audio: silentAudioUrl,
