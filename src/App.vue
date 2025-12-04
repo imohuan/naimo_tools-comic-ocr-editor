@@ -2,7 +2,7 @@
   <n-config-provider :theme-overrides="themeOverrides">
     <div class="flex h-screen overflow-hidden bg-gray-50">
       <!-- 左侧图片 / 文本双侧列表 -->
-      <div class="flex h-full bg-white">
+      <div class="flex h-full bg-white relative">
         <ImageList
           :is-collapsed="isImageListCollapsed"
           @toggle-collapse="toggleImageListCollapse"
@@ -14,6 +14,16 @@
           @toggle-collapse="toggleTextSidebarCollapse"
           @resize-width="(w: number) => (textSidebarWidth = w)"
         />
+
+        <!-- absolute -bottom-1 -right-1 text-[9px] font-bold leading-none text-white bg-gray-800 rounded px-1 py-0.5 font-mono shadow-lg z-10 min-w-[14px] text-center -->
+        <div
+          class="absolute left-full top-1 ml-1 z-30 flex items-center justify-center cursor-pointer transition-all duration-200 select-none"
+        >
+          <span
+            class="text-[9px] py-0.5 bg-gray-800 text-white rounded font-mono px-3 font-bold"
+            >Tab</span
+          >
+        </div>
       </div>
 
       <!-- 中间画布区域 -->
@@ -56,7 +66,7 @@
             @open-tasks="showTasks = true"
           />
 
-          <!-- 页码显示 - 左上角 -->
+          <!-- 页码显示 - 左下角 -->
           <div
             v-if="ocrStore.images.length > 0"
             class="absolute bottom-4 left-4 z-50 text-gray-500 font-mono font-bold text-lg"

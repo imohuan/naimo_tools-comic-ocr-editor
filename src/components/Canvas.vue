@@ -5,11 +5,11 @@
     <!-- 对比模式的分割线和标签 -->
     <template v-if="isComparing">
       <!-- 左侧标签 -->
-      <div
+      <!-- <div
         class="absolute top-4 left-4 bg-black/70 text-white px-4 py-2 rounded-md text-sm font-medium z-50 pointer-events-none backdrop-blur"
       >
         原图
-      </div>
+      </div> -->
 
       <!-- 右侧标签 -->
       <div
@@ -196,7 +196,6 @@ const loadImageWithOcr = async (
   image?: File | string,
   ocrResult?: OcrTextResult | null
 ) => {
-  
   // 没有图片时直接返回
   if (!image) {
     // 先清空画布
