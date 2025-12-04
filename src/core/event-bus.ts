@@ -1,4 +1,5 @@
 import mitt from "mitt";
+import type { SequencePlaybackItem } from "../components/AudioSequencePlayer.vue";
 
 export type CanvasEvents = {
   "canvas:zoom-in": void;
@@ -19,6 +20,11 @@ export type SidebarTab = "images" | "text";
 
 export type UiEvents = {
   "ui:sidebar-switch": SidebarTab;
+  // 打开全局音频序列播放器（来源：单张图片文本 / 全部图片）
+  "sequence-player:open": {
+    source: "current-image" | "all-images";
+    playlist: SequencePlaybackItem[];
+  };
 };
 
 export const canvasEventBus = mitt<CanvasEvents>();

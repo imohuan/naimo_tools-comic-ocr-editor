@@ -120,7 +120,7 @@
 
       <!-- 底部批量音频生成工具栏 -->
       <div
-        class="border-t border-gray-200 px-3 py-2 flex items-center justify-start text-xs"
+        class="border-t border-gray-200 px-3 py-2 flex items-center justify-between text-xs"
       >
         <div
           class="inline-flex items-stretch h-8 rounded-md overflow-hidden"
@@ -270,6 +270,36 @@
             </div>
           </n-popover>
         </div>
+
+        <button
+          class="ml-3 h-8 px-3 rounded-md flex items-center gap-1 text-xs font-medium transition-colors"
+          :class="
+            canPlaySequence
+              ? 'bg-indigo-500 text-white hover:bg-indigo-600'
+              : 'bg-gray-200 text-gray-500 cursor-not-allowed'
+          "
+          :disabled="!canPlaySequence"
+          type="button"
+          @click="handleOpenPlayback"
+        >
+          <span
+            v-if="playerLoading"
+            class="w-3 h-3 border-2 border-white/60 border-t-transparent rounded-full animate-spin"
+          ></span>
+          <svg
+            v-else
+            class="w-3.5 h-3.5"
+            viewBox="0 0 24 24"
+            fill="currentColor"
+          >
+            <path d="M8 5v14l11-7z" />
+          </svg>
+          <span>{{ playerLoading ? "准备中" : "序列播放" }}</span>
+        </button>
+
+        <span v-if="playerError" class="ml-3 text-[11px] text-red-500">
+          {{ playerError }}
+        </span>
       </div>
     </div>
 
@@ -285,10 +315,13 @@
 import { computed, ref, watch, nextTick, toRefs, onBeforeUnmount } from "vue";
 import { VueDraggable } from "vue-draggable-plus";
 import { storeToRefs } from "pinia";
-import type { OcrTextDetail } from "../types";
+import type { ImageItem, OcrTextDetail } from "../types";
 import { useOcrStore } from "../stores/ocrStore";
 import TextResultItem from "./TextResultItem.vue";
 import { NPopover } from "naive-ui";
+import { getImageDimensions, getImageDimensionsFromUrl } from "../utils/image";
+import { uiEventBus } from "../core/event-bus";
+import type { SequencePlaybackItem } from "./AudioSequencePlayer.vue";
 
 interface Props {
   voiceRoleOptions: Array<{ label: string; value: string }>;
@@ -305,6 +338,7 @@ const { isCollapsed, width } = toRefs(props);
 
 const ocrStore = useOcrStore();
 const { canUndoDetails, canRedoDetails } = storeToRefs(ocrStore);
+const currentImage = computed(() => ocrStore.currentImage);
 
 type TextResultItemInstance = InstanceType<typeof TextResultItem> | null;
 const itemRefs = ref<TextResultItemInstance[]>([]);
@@ -410,6 +444,14 @@ watch(
   { deep: false }
 );
 
+watch(
+  detailsSource,
+  () => {
+    playerError.value = null;
+  },
+  { deep: false }
+);
+
 const handleChangeTranslated = (detailIndex: number, value: string) => {
   const list = [...(detailsSource.value || [])];
   const target = list[detailIndex];
@@ -475,9 +517,26 @@ const batchDropdownVisible = ref(false);
 const concurrencyOptions = [1, 2, 3, 5, 8];
 const concurrency = ref(2);
 
+// 播放器状态（本地仅做按钮 loading / 错误提示，全局播放交给 App 控制）
+const playerLoading = ref(false);
+const playerError = ref<string | null>(null);
+
 // 是否存在文本（用于控制按钮是否可用）
 const canBatchRun = computed(() => {
   return hasDetails.value;
+});
+
+const allAudioReady = computed(() => {
+  const list =
+    (detailsSource.value as Array<
+      OcrTextDetail & { audioLoading?: boolean }
+    >) || [];
+  if (!list.length) return false;
+  return list.every((detail) => detail?.audioUrl && !detail.audioLoading);
+});
+
+const canPlaySequence = computed(() => {
+  return allAudioReady.value && !playerLoading.value;
 });
 
 const handleSelectBatchMode = (key: "skipDone" | "forceAll") => {
@@ -540,6 +599,63 @@ const handleStartBatchAudio = async () => {
 const handleStopBatchAudio = () => {
   if (!batchRunning.value) return;
   batchRunning.value = false;
+};
+
+const resolveImageSize = async (image: ImageItem) => {
+  if (image.file) {
+    return getImageDimensions(image.file);
+  }
+  const src = image.processedImageUrl || image.url;
+  if (!src) {
+    throw new Error("无法获取当前图片资源");
+  }
+  return getImageDimensionsFromUrl(src);
+};
+
+const buildPlaybackPlaylist = async (): Promise<SequencePlaybackItem[]> => {
+  const image = currentImage.value;
+  if (!image) {
+    throw new Error("当前没有可用图片");
+  }
+  const src = image.processedImageUrl || image.url;
+  if (!src) {
+    throw new Error("未找到图片地址");
+  }
+  const { width, height } = await resolveImageSize(image);
+  return (detailsSource.value || []).map((detail: OcrTextDetail) => ({
+    image: src,
+    audio: detail.audioUrl || "",
+    text: detail.translatedText || detail.text || "",
+    rect: {
+      minX: detail.minX,
+      minY: detail.minY,
+      maxX: detail.maxX,
+      maxY: detail.maxY,
+    },
+    imageWidth: width,
+    imageHeight: height,
+  }));
+};
+
+const handleOpenPlayback = async () => {
+  if (!canPlaySequence.value || playerLoading.value) return;
+  playerLoading.value = true;
+  playerError.value = null;
+  try {
+    const playlist = await buildPlaybackPlaylist();
+    if (!playlist.every((item) => item.audio)) {
+      throw new Error("存在未生成的音频，无法播放");
+    }
+    uiEventBus.emit("sequence-player:open", {
+      source: "current-image",
+      playlist,
+    });
+  } catch (error: any) {
+    playerError.value =
+      typeof error?.message === "string" ? error.message : "播放准备失败";
+  } finally {
+    playerLoading.value = false;
+  }
 };
 
 const onUndo = () => ocrStore.undoDetails();

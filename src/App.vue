@@ -17,7 +17,9 @@
       </div>
 
       <!-- 中间画布区域 -->
-      <div class="flex-1 flex flex-col relative bg-gray-50 w-full overflow-hidden">
+      <div
+        class="flex-1 flex flex-col relative bg-gray-50 w-full overflow-hidden"
+      >
         <!-- 画布 + 底部控制栏（在画布容器内部居中） -->
         <div class="flex-1 relative overflow-hidden">
           <Canvas
@@ -36,7 +38,9 @@
 
           <!-- 底部控制栏：相对于画布区域绝对定位并水平居中 -->
           <BottomToolbar
-            :current-page="ocrStore.images.length > 0 ? ocrStore.currentIndex + 1 : 0"
+            :current-page="
+              ocrStore.images.length > 0 ? ocrStore.currentIndex + 1 : 0
+            "
             :total-pages="ocrStore.images.length"
             :display-zoom="displayZoom"
             :has-image="!!currentImage"
@@ -86,6 +90,22 @@
     >
       <SettingsPanel @close="showSettings = false" />
     </n-modal>
+
+    <!-- 全局文本音频序列播放弹窗 -->
+    <n-modal
+      v-model:show="sequencePlayerVisible"
+      :show-icon="false"
+      preset="card"
+      :title="sequencePlayerTitle"
+      :style="{ width: '1040px' }"
+    >
+      <div class="w-full h-[640px]">
+        <AudioSequencePlayer
+          :model-value="sequencePlayerVisible"
+          :playlist="sequencePlayerPlaylist"
+        />
+      </div>
+    </n-modal>
   </n-config-provider>
 </template>
 
@@ -100,7 +120,10 @@ import TextResultList from "./components/TextResultList.vue";
 import SettingsPanel from "./components/SettingsPanel.vue";
 import BottomToolbar from "./components/BottomToolbar.vue";
 import CropPreview from "./components/CropPreview.vue";
-import { canvasEventBus } from "./core/event-bus";
+import AudioSequencePlayer, {
+  SequencePlaybackItem,
+} from "./components/AudioSequencePlayer.vue";
+import { canvasEventBus, uiEventBus } from "./core/event-bus";
 import type { OcrTextResult } from "./types/index";
 import { useEdgeTts } from "./composables/useEdgeTts";
 
@@ -113,6 +136,10 @@ const themeOverrides = {
 
 const canvasRef = ref<InstanceType<typeof Canvas>>();
 const showSettings = ref(false);
+// 全局文本音频序列播放器状态
+const sequencePlayerVisible = ref(false);
+const sequencePlayerPlaylist = ref<SequencePlaybackItem[]>([]);
+const sequencePlayerTitle = ref("文本音频序列播放");
 const ocrStore = useOcrStore();
 const ocrLoading = computed(() => ocrStore.ocrLoading);
 const zoomLevel = ref(1);
@@ -254,7 +281,10 @@ const cropImage = async (
       const clampedY = Math.max(0, Math.floor(y));
 
       // 确保宽度和高度为正数，且不超出图片边界
-      const clampedWidth = Math.max(1, Math.min(Math.floor(width), imgWidth - clampedX));
+      const clampedWidth = Math.max(
+        1,
+        Math.min(Math.floor(width), imgWidth - clampedX)
+      );
       const clampedHeight = Math.max(
         1,
         Math.min(Math.floor(height), imgHeight - clampedY)
@@ -365,14 +395,16 @@ const handleWaitingRectComplete = async (rect: {
           const relativeX = detail.minX / croppedImageWidth;
           const relativeY = detail.minY / croppedImageHeight;
           const relativeWidth = (detail.maxX - detail.minX) / croppedImageWidth;
-          const relativeHeight = (detail.maxY - detail.minY) / croppedImageHeight;
+          const relativeHeight =
+            (detail.maxY - detail.minY) / croppedImageHeight;
 
           // 转换为原图坐标（像素）
           // 裁剪区域在原图中的位置是 imageCoords.x, imageCoords.y
           const originalMinX = imageCoords.x + relativeX * croppedImageWidth;
           const originalMinY = imageCoords.y + relativeY * croppedImageHeight;
           const originalMaxX = originalMinX + relativeWidth * croppedImageWidth;
-          const originalMaxY = originalMinY + relativeHeight * croppedImageHeight;
+          const originalMaxY =
+            originalMinY + relativeHeight * croppedImageHeight;
 
           return {
             ...detail,
@@ -495,6 +527,15 @@ const updateZoom = (event: { level: number }) => {
 
 onMounted(() => {
   canvasEventBus.on("canvas:zoom", updateZoom);
+  // 监听来自侧边栏的序列播放请求
+  uiEventBus.on("sequence-player:open", (payload) => {
+    sequencePlayerTitle.value =
+      payload.source === "all-images"
+        ? "全部图片文本音频序列播放"
+        : "文本音频序列播放";
+    sequencePlayerPlaylist.value = payload.playlist;
+    sequencePlayerVisible.value = true;
+  });
   // 加载播音人列表
   loadVoiceRoleOptions();
   // 初始化时执行重置缩放，确保居中计算正确
@@ -507,6 +548,7 @@ onMounted(() => {
 
 onUnmounted(() => {
   canvasEventBus.off("canvas:zoom", updateZoom);
+  uiEventBus.all.clear();
 });
 
 useEventListener(window, "keydown", (event: KeyboardEvent) => {

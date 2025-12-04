@@ -177,9 +177,9 @@
       </div>
     </div>
 
-    <!-- 底部批量 OCR 工具栏 -->
+    <!-- 底部批量 OCR / 全局播放 工具栏 -->
     <div
-      class="border-t border-gray-200 px-3 py-2 flex items-center justify-start text-xs"
+      class="border-t border-gray-200 px-3 py-2 flex items-center justify-between text-xs"
     >
       <!-- 折叠状态：只显示一个小方形图标按钮，不显示文字和下拉 -->
       <div v-if="isCollapsed" class="w-full flex justify-center">
@@ -349,6 +349,33 @@
           </div>
         </n-popover>
       </div>
+
+      <!-- 所有图片的序列播放按钮（仅在展开状态下显示） -->
+      <button
+        v-if="!isCollapsed"
+        class="ml-3 h-8 px-3 rounded-md flex items-center gap-1 text-xs font-medium transition-colors"
+        :class="
+          canPlaySequence
+            ? 'bg-indigo-500 text-white hover:bg-indigo-600'
+            : 'bg-gray-200 text-gray-500 cursor-not-allowed'
+        "
+        :disabled="!canPlaySequence"
+        type="button"
+        @click="handleOpenPlayback"
+      >
+        <span
+          v-if="playerLoading"
+          class="w-3 h-3 border-2 border-white/60 border-t-transparent rounded-full animate-spin"
+        ></span>
+        <svg v-else class="w-3.5 h-3.5" viewBox="0 0 24 24" fill="currentColor">
+          <path d="M8 5v14l11-7z" />
+        </svg>
+        <span>{{ playerLoading ? "准备中" : "序列播放" }}</span>
+      </button>
+
+      <span v-if="playerError" class="ml-3 text-[11px] text-red-500">
+        {{ playerError }}
+      </span>
     </div>
   </div>
 </template>
@@ -357,6 +384,10 @@
 import { ref, computed, toRefs } from "vue";
 import { NPopover } from "naive-ui";
 import { useOcrStore } from "../stores/ocrStore";
+import type { ImageItem, OcrTextDetail } from "../types";
+import { getImageDimensions, getImageDimensionsFromUrl } from "../utils/image";
+import { uiEventBus } from "../core/event-bus";
+import type { SequencePlaybackItem } from "./AudioSequencePlayer.vue";
 
 const store = useOcrStore();
 const props = defineProps<{
@@ -435,6 +466,111 @@ const handleSelectBatchMode = (key: "skipDone" | "forceAll") => {
 const canBatchRun = computed(() => {
   return !!(images.value && images.value.length > 0);
 });
+
+// 序列播放（针对所有图片，仅维护按钮 loading / 错误状态）
+const playerLoading = ref(false);
+const playerError = ref<string | null>(null);
+
+// 计算所有图片的文本音频是否都已就绪
+const allAudioReady = computed(() => {
+  const list = (images.value || []) as ImageItem[];
+  if (!list.length) return false;
+
+  const allDetails: (OcrTextDetail & { audioLoading?: boolean })[] = [];
+  list.forEach((image) => {
+    if (image?.ocrResult?.details?.length) {
+      allDetails.push(
+        ...(image.ocrResult.details as (OcrTextDetail & {
+          audioLoading?: boolean;
+        })[])
+      );
+    }
+  });
+
+  if (!allDetails.length) return false;
+  return allDetails.every((detail) => detail.audioUrl && !detail.audioLoading);
+});
+
+const canPlaySequence = computed(() => {
+  return allAudioReady.value && !playerLoading.value;
+});
+
+// 解析图片尺寸
+const resolveImageSize = async (image: ImageItem) => {
+  if (image.file) {
+    return getImageDimensions(image.file);
+  }
+  const src = image.processedImageUrl || image.url;
+  if (!src) {
+    throw new Error("无法获取当前图片资源");
+  }
+  return getImageDimensionsFromUrl(src);
+};
+
+// 构建「所有图片」的播放列表
+const buildGlobalPlaybackPlaylist = async (): Promise<
+  SequencePlaybackItem[]
+> => {
+  const list = (images.value || []) as ImageItem[];
+  if (!list.length) {
+    throw new Error("当前没有可用图片");
+  }
+
+  const result: SequencePlaybackItem[] = [];
+
+  for (const image of list) {
+    const src = image.processedImageUrl || image.url;
+    if (!src || !image.ocrResult || !image.ocrResult.details?.length) {
+      continue;
+    }
+
+    const { width, height } = await resolveImageSize(image);
+
+    for (const detail of image.ocrResult.details as OcrTextDetail[]) {
+      result.push({
+        image: src,
+        audio: detail.audioUrl || "",
+        text: detail.translatedText || detail.text || "",
+        rect: {
+          minX: detail.minX,
+          minY: detail.minY,
+          maxX: detail.maxX,
+          maxY: detail.maxY,
+        },
+        imageWidth: width,
+        imageHeight: height,
+      });
+    }
+  }
+
+  return result;
+};
+
+// 打开序列播放（所有图片）
+const handleOpenPlayback = async () => {
+  if (!canPlaySequence.value || playerLoading.value) return;
+  playerLoading.value = true;
+  playerError.value = null;
+
+  try {
+    const playlist = await buildGlobalPlaybackPlaylist();
+    if (!playlist.length) {
+      throw new Error("暂无可播放的音频");
+    }
+    if (!playlist.every((item) => item.audio)) {
+      throw new Error("存在未生成的音频，无法播放");
+    }
+    uiEventBus.emit("sequence-player:open", {
+      source: "all-images",
+      playlist,
+    });
+  } catch (error: any) {
+    playerError.value =
+      typeof error?.message === "string" ? error.message : "播放准备失败";
+  } finally {
+    playerLoading.value = false;
+  }
+};
 
 // 内部：执行实际批量 OCR 逻辑（从 nextBatchIndex 开始，逐个执行）
 const runBatchOcrInternal = async () => {
