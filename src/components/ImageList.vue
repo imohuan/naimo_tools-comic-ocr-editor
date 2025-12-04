@@ -386,9 +386,11 @@ import type { ImageItem, OcrTextDetail } from "../types";
 import { getImageDimensions, getImageDimensionsFromUrl } from "../utils/image";
 import { uiEventBus } from "../core/event-bus";
 import type { SequencePlaybackItem } from "./AudioSequencePlayer.vue";
+import { useNotify } from "../composables/useNotify";
 
 const store = useOcrStore();
 const taskStore = useTaskStore();
+const { success: notify } = useNotify();
 const props = defineProps<{
   isCollapsed: boolean;
 }>();
@@ -529,6 +531,35 @@ const resolveImageSize = async (image: ImageItem) => {
   return getImageDimensionsFromUrl(src);
 };
 
+// 计算将要添加的任务数量
+const calculateTaskCount = () => {
+  const list = (images.value || []) as ImageItem[];
+  let ocrTaskCount = 0;
+  let audioTaskCount = 0;
+
+  if (isBatchOcrSelected.value) {
+    // 计算 OCR 任务数量
+    ocrTaskCount = list.filter((img) => {
+      if (!img?.file) return false;
+      if (batchMode.value === "skipDone" && img.ocrResult) return false;
+      return true;
+    }).length;
+  }
+
+  if (isBatchAudioSelected.value) {
+    // 计算音频任务数量
+    list.forEach((img) => {
+      if (!img?.ocrResult?.details?.length) return;
+      img.ocrResult.details.forEach((detail) => {
+        if (batchMode.value === "skipDone" && detail.audioUrl) return;
+        audioTaskCount++;
+      });
+    });
+  }
+
+  return { ocrTaskCount, audioTaskCount, total: ocrTaskCount + audioTaskCount };
+};
+
 // 构建「所有图片」的播放列表
 const buildGlobalPlaybackPlaylist = async (): Promise<
   SequencePlaybackItem[]
@@ -599,6 +630,20 @@ const handleBatchExecute = () => {
   if (!canBatchExecute.value) return;
   const wantsOcr = isBatchOcrSelected.value;
   const wantsAudio = isBatchAudioSelected.value;
+
+  // 计算任务数量并显示提示
+  const { ocrTaskCount, audioTaskCount, total } = calculateTaskCount();
+
+  let message = `已添加 ${total} 个任务到队列`;
+  if (wantsOcr && wantsAudio) {
+    message = `已添加 ${ocrTaskCount} 个 OCR 任务和 ${audioTaskCount} 个音频任务到队列`;
+  } else if (wantsOcr) {
+    message = `已添加 ${ocrTaskCount} 个 OCR 任务到队列`;
+  } else if (wantsAudio) {
+    message = `已添加 ${audioTaskCount} 个音频任务到队列`;
+  }
+
+  notify(message);
 
   if (wantsAudio) {
     if (!wantsOcr) {

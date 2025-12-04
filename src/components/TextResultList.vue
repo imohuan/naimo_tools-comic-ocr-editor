@@ -269,6 +269,7 @@ import { NPopover } from "naive-ui";
 import { getImageDimensions, getImageDimensionsFromUrl } from "../utils/image";
 import { uiEventBus } from "../core/event-bus";
 import type { SequencePlaybackItem } from "./AudioSequencePlayer.vue";
+import { useNotify } from "../composables/useNotify";
 
 interface Props {
   voiceRoleOptions: Array<{ label: string; value: string }>;
@@ -285,6 +286,7 @@ const { isCollapsed, width } = toRefs(props);
 
 const ocrStore = useOcrStore();
 const taskStore = useTaskStore();
+const { success: notify } = useNotify();
 const { canUndoDetails, canRedoDetails } = storeToRefs(ocrStore);
 const currentImage = computed(() => ocrStore.currentImage);
 
@@ -492,8 +494,25 @@ const handleSelectBatchMode = (key: "skipDone" | "forceAll") => {
   batchDropdownVisible.value = false;
 };
 
+// 计算将要添加的音频任务数量
+const calculateAudioTaskCount = () => {
+  const list = (detailsSource.value as Array<
+    OcrTextDetail & { id?: string; audioLoading?: boolean }
+  >) || [];
+
+  return list.filter((detail) => {
+    if (batchMode.value === "skipDone" && detail.audioUrl) return false;
+    return true;
+  }).length;
+};
+
 const handleStartBatchAudio = () => {
   if (!canBatchRun.value) return;
+
+  // 计算任务数量并显示提示
+  const audioTaskCount = calculateAudioTaskCount();
+  notify(`已添加 ${audioTaskCount} 个音频任务到队列`);
+
   taskStore.startBatchAudioForCurrentImage(batchMode.value);
 };
 
