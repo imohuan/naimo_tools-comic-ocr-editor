@@ -75,6 +75,45 @@ export const bufferToWave = (abuffer: AudioBuffer, len: number): Blob => {
  * 合并多个音频文件为一个 WAV Blob
  * 流程完全参考 `audio.js` 中的 `mergeAudio`，去掉了 React 相关逻辑
  */
+/**
+ * 生成指定时长的空白音频
+ * @param duration 时长（秒），默认 3 秒
+ * @param sampleRate 采样率，默认 44100
+ * @param channels 声道数，默认 2（双声道）
+ * @returns 包含 blob 和 duration 的对象
+ */
+export const generateSilentAudio = async (
+  duration = 3,
+  sampleRate = 44100,
+  channels = 2
+): Promise<{ blob: Blob; duration: number }> => {
+  // 初始化 AudioContext
+  const AudioCtx: typeof AudioContext =
+    (window as any).AudioContext || (window as any).webkitAudioContext;
+  if (!AudioCtx) {
+    throw new Error("当前环境不支持 Web Audio API");
+  }
+
+  const ctx = new AudioCtx();
+
+  try {
+    // 计算样本数
+    const length = Math.floor(duration * sampleRate);
+
+    // 创建空的音频缓冲区（静音）
+    const buffer = ctx.createBuffer(channels, length, sampleRate);
+
+    // 编码为 WAV Blob
+    const blob = bufferToWave(buffer, length);
+
+    return { blob, duration };
+  } finally {
+    ctx.close().catch(() => {
+      // 忽略关闭失败
+    });
+  }
+};
+
 export const mergeAudioFiles = async (
   files: File[],
   options: MergeAudioOptions = {}

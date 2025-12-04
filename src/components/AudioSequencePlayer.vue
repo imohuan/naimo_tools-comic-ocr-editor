@@ -310,7 +310,7 @@ export interface SequencePlaybackItem {
   image: string;
   audio: string;
   text: string;
-  rect: SequencePlaybackRect;
+  rect: SequencePlaybackRect | null;
   imageWidth: number;
   imageHeight: number;
 }
@@ -535,16 +535,19 @@ const drawFrame = async () => {
 
     ctx.drawImage(img, offsetX, offsetY, drawWidth, drawHeight);
 
-    const rectWidth = (item.rect.maxX - item.rect.minX) * baseScale * zoom.value;
-    const rectHeight = (item.rect.maxY - item.rect.minY) * baseScale * zoom.value;
-    const rectX = offsetX + item.rect.minX * baseScale * zoom.value;
-    const rectY = offsetY + item.rect.minY * baseScale * zoom.value;
+    // 只有当 rect 不为 null 时才绘制高亮框
+    if (item.rect) {
+      const rectWidth = (item.rect.maxX - item.rect.minX) * baseScale * zoom.value;
+      const rectHeight = (item.rect.maxY - item.rect.minY) * baseScale * zoom.value;
+      const rectX = offsetX + item.rect.minX * baseScale * zoom.value;
+      const rectY = offsetY + item.rect.minY * baseScale * zoom.value;
 
-    ctx.strokeStyle = "#ef4444";
-    ctx.lineWidth = Math.max(2, 2 * scale);
-    ctx.shadowColor = "rgba(239,68,68,0.5)";
-    ctx.shadowBlur = 6;
-    ctx.strokeRect(rectX, rectY, rectWidth, rectHeight);
+      ctx.strokeStyle = "#ef4444";
+      ctx.lineWidth = Math.max(2, 2 * scale);
+      ctx.shadowColor = "rgba(239,68,68,0.5)";
+      ctx.shadowBlur = 6;
+      ctx.strokeRect(rectX, rectY, rectWidth, rectHeight);
+    }
   } catch (error) {
     console.error("绘制图像失败", error);
   } finally {
@@ -598,6 +601,8 @@ const prepareTimeline = async () => {
     }
     return;
   }
+
+  console.log("播放列表", props.playlist);
 
   isPreparing.value = true;
   preparationError.value = null;

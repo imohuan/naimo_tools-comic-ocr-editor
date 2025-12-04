@@ -417,6 +417,7 @@ import { getImageDimensions, getImageDimensionsFromUrl } from "../utils/image";
 import { uiEventBus } from "../core/event-bus";
 import type { SequencePlaybackItem } from "./AudioSequencePlayer.vue";
 import { useNotify } from "../composables/useNotify";
+import { generateSilentAudio } from "../utils/audio";
 
 const store = useOcrStore();
 const taskStore = useTaskStore();
@@ -613,26 +614,43 @@ const buildGlobalPlaybackPlaylist = async (): Promise<
 
   for (const image of list) {
     const src = image.processedImageUrl || image.url;
-    if (!src || !image.ocrResult || !image.ocrResult.details?.length) {
+    if (!src) {
       continue;
     }
 
     const { width, height } = await resolveImageSize(image);
 
-    for (const detail of image.ocrResult.details as OcrTextDetail[]) {
+    // 如果没有 OCR 结果或详情为空，创建一个 3 秒的空白播放项
+    if (!image.ocrResult || !image.ocrResult.details?.length) {
+      // 生成 3 秒空白音频
+      const { blob } = await generateSilentAudio(3);
+      const silentAudioUrl = URL.createObjectURL(blob);
+
       result.push({
         image: src,
-        audio: detail.audioUrl || "",
-        text: detail.translatedText || detail.text || "",
-        rect: {
-          minX: detail.minX,
-          minY: detail.minY,
-          maxX: detail.maxX,
-          maxY: detail.maxY,
-        },
+        audio: silentAudioUrl,
+        text: "",
+        rect: null, // 设置为 null 表示没有需要高亮的区域
         imageWidth: width,
         imageHeight: height,
       });
+    } else {
+      // 正常处理有 OCR 结果的图片
+      for (const detail of image.ocrResult.details as OcrTextDetail[]) {
+        result.push({
+          image: src,
+          audio: detail.audioUrl || "",
+          text: detail.translatedText || detail.text || "",
+          rect: {
+            minX: detail.minX,
+            minY: detail.minY,
+            maxX: detail.maxX,
+            maxY: detail.maxY,
+          },
+          imageWidth: width,
+          imageHeight: height,
+        });
+      }
     }
   }
 
