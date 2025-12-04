@@ -87,26 +87,24 @@ export const useEdgeTts = () => {
     }
   };
 
-  const revokeLastUrl = () => {
-    if (lastAudioUrl.value) {
-      URL.revokeObjectURL(lastAudioUrl.value);
-      lastAudioUrl.value = null;
-    }
-  };
-
   /**
    * 生成音频并返回可播放的 URL（不主动播放）
+   * 注意：返回的 URL 不会被自动销毁，需要手动管理生命周期
    * @param text 文本内容
    * @param voice 语音角色（如 zh-CN-XiaoxiaoNeural）
    */
-  const generateAudioUrl = async (text: string, voice?: string) => {
+  const generateAudioUrl = async (
+    text: string,
+    voice?: string,
+    options?: { signal?: AbortSignal }
+  ): Promise<string | undefined> => {
     const content = text?.trim();
     if (!content) return;
 
     loading.value = true;
     errorMessage.value = null;
 
-    try {
+    const runSynthesis = async () => {
       const tts = new EdgeTTS(
         content,
         voice && voice.trim() ? voice.trim() : "zh-CN-XiaoxiaoNeural"
@@ -114,12 +112,42 @@ export const useEdgeTts = () => {
 
       // Simple API：synthesize 返回 { audio: Blob, subtitle: WordBoundary[] }
       const result = await tts.synthesize();
+      if (options?.signal?.aborted) {
+        throw new DOMException("Aborted", "AbortError");
+      }
       const audioBlob = result.audio;
 
-      revokeLastUrl();
+      // 创建 URL 但不自动销毁，由调用方管理生命周期
       const audioUrl = URL.createObjectURL(audioBlob);
       lastAudioUrl.value = audioUrl;
       return audioUrl;
+    };
+
+    try {
+      if (options?.signal) {
+        if (options.signal.aborted) {
+          throw new DOMException("Aborted", "AbortError");
+        }
+        let abortHandler: (() => void) | null = null;
+        const abortPromise = new Promise((_resolve, reject) => {
+          abortHandler = () => {
+            reject(new DOMException("Aborted", "AbortError"));
+          };
+          options.signal?.addEventListener("abort", abortHandler!, {
+            once: true,
+          });
+        });
+
+        try {
+          return (await Promise.race([runSynthesis(), abortPromise])) as string | undefined;
+        } finally {
+          if (abortHandler) {
+            options.signal?.removeEventListener("abort", abortHandler);
+          }
+        }
+      }
+
+      return await runSynthesis();
     } catch (error: any) {
       console.error("生成音频失败:", error);
       errorMessage.value =

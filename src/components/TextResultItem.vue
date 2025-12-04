@@ -78,12 +78,12 @@
             type="button"
             class="w-7 h-7 p-0 rounded-md text-gray-500 hover:text-emerald-600 hover:bg-emerald-50 transition-colors flex items-center justify-center flex-shrink-0 disabled:opacity-60 disabled:cursor-default"
             aria-label="生成音频"
-            :disabled="detail.audioLoading"
+            :disabled="audioLoading"
             @click="handleGenerateAudio"
           >
             <!-- 加载中：小圆环 spinner -->
             <div
-              v-if="detail.audioLoading"
+              v-if="audioLoading"
               class="w-3.5 h-3.5 border-2 border-emerald-500 border-t-transparent rounded-full animate-spin"
             ></div>
             <!-- 默认播放图标 -->
@@ -196,12 +196,15 @@
 import { ref, watch, computed } from "vue";
 import { NInput, NPopover } from "naive-ui";
 import type { OcrTextDetail } from "../types";
-import { useEdgeTts } from "../composables/useEdgeTts";
 
 interface Props {
   detail: OcrTextDetail;
   index: number;
   voiceRoleOptions: Array<{ label: string; value: string }>;
+  progress?: {
+    loading: boolean;
+    error: string | null;
+  };
 }
 
 interface Emits {
@@ -209,12 +212,13 @@ interface Emits {
   (e: "update-origin", index: number, value: string): void;
   (e: "update-voice-role", index: number, value: string | null): void;
   (e: "delete-detail", index: number): void;
-  (e: "update-audio-state", index: number, value: Partial<OcrTextDetail>): void;
+  (e: "generate-audio", index: number): void;
 }
 
 const props = defineProps<Props>();
 const emit = defineEmits<Emits>();
-const { audioUrl, generateAudioUrl } = useEdgeTts();
+
+const audioLoading = computed(() => props.progress?.loading ?? false);
 
 // 文本字段有可能是对象（如 { CHS, zh }），统一转成字符串
 const normalizeText = (value: unknown): string => {
@@ -300,48 +304,12 @@ const toggleOrigin = () => {
   showOrigin.value = !showOrigin.value;
 };
 
-// 生成音频并更新当前明细的音频状态到 Store
+// 生成音频请求交给上层 / 任务 Store 处理
 const handleGenerateAudio = async () => {
-  const textSource =
-    localTranslatedText.value ||
-    localOriginText.value ||
-    normalizeText(props.detail.text);
-
-  const voice =
-    localVoiceRole.value ||
-    props.detail.voiceRole ||
-    props.voiceRoleOptions?.[0]?.value ||
-    "zh-CN-XiaoxiaoNeural";
-
-  const content = textSource.trim();
-  if (!content) return;
-
-  // 开始生成：更新当前条目的音频状态（存到 ocrStore 中）
-  emit("update-audio-state", props.index, {
-    audioLoading: true,
-    audioError: null,
-  });
-
-  try {
-    const url = await generateAudioUrl(content, voice);
-    emit("update-audio-state", props.index, {
-      audioLoading: false,
-      audioUrl: url ?? audioUrl.value ?? null,
-      audioError: null,
-    });
-  } catch (error: any) {
-    const msg =
-      typeof error?.message === "string" ? error.message : "生成音频失败";
-    emit("update-audio-state", props.index, {
-      audioLoading: false,
-      audioError: msg,
-    });
-  }
+  emit("generate-audio", props.index);
 };
 
-defineExpose({
-  generateAudio: () => handleGenerateAudio(),
-});
+defineExpose({});
 </script>
 
 <style scoped></style>

@@ -57,6 +57,7 @@
             @toggle-waiting-mode="handleToggleWaitingMode"
             @toggle-brush-mode="handleToggleBrushMode"
             @toggle-compare="handleToggleCompare"
+            @open-tasks="showTasks = true"
           />
 
           <!-- 页码显示 - 左上角 -->
@@ -86,13 +87,24 @@
       v-model:show="showSettings"
       preset="dialog"
       title="设置"
-      style="width: 600px"
+      :show-icon="false"
+      style="width: 1200px"
     >
       <SettingsPanel @close="showSettings = false" />
     </n-modal>
 
-    <!-- 全局文本音频序列播放弹窗 -->
+    <!-- 任务列表对话框 -->
     <n-modal
+      v-model:show="showTasks"
+      preset="card"
+      title="任务列表"
+      :style="{ width: '1040px', 'min-height': '400px' }"
+    >
+      <TaskListPanel />
+    </n-modal>
+
+    <!-- 全局文本音频序列播放弹窗 -->
+    <!-- <n-modal
       v-model:show="sequencePlayerVisible"
       :show-icon="false"
       preset="card"
@@ -105,7 +117,13 @@
           :playlist="sequencePlayerPlaylist"
         />
       </div>
-    </n-modal>
+    </n-modal> -->
+    <div class="fixed inset-0 z-50" v-show="sequencePlayerVisible">
+      <AudioSequencePlayer
+        :model-value="sequencePlayerVisible"
+        :playlist="sequencePlayerPlaylist"
+      />
+    </div>
   </n-config-provider>
 </template>
 
@@ -114,6 +132,7 @@ import { ref, computed, onMounted, onUnmounted, nextTick } from "vue";
 import { useEventListener } from "@vueuse/core";
 import { NConfigProvider, NModal } from "naive-ui";
 import { useOcrStore } from "./stores/ocrStore";
+import { useTaskStore } from "./stores/taskStore";
 import Canvas from "./components/Canvas.vue";
 import ImageList from "./components/ImageList.vue";
 import TextResultList from "./components/TextResultList.vue";
@@ -123,6 +142,7 @@ import CropPreview from "./components/CropPreview.vue";
 import AudioSequencePlayer, {
   SequencePlaybackItem,
 } from "./components/AudioSequencePlayer.vue";
+import TaskListPanel from "./components/TaskListPanel.vue";
 import { canvasEventBus, uiEventBus } from "./core/event-bus";
 import type { OcrTextResult } from "./types/index";
 import { useEdgeTts } from "./composables/useEdgeTts";
@@ -141,6 +161,7 @@ const sequencePlayerVisible = ref(false);
 const sequencePlayerPlaylist = ref<SequencePlaybackItem[]>([]);
 const sequencePlayerTitle = ref("文本音频序列播放");
 const ocrStore = useOcrStore();
+const taskStore = useTaskStore();
 const ocrLoading = computed(() => ocrStore.ocrLoading);
 const zoomLevel = ref(1);
 const isWaitingMode = ref(false);
@@ -155,6 +176,8 @@ const textSidebarWidth = ref(260);
 const { voiceRoleOptions, loadVoiceRoleOptions } = useEdgeTts();
 // 裁剪预览图片
 const cropPreviewImage = ref<File | null>(null);
+// 任务列表
+const showTasks = ref(false);
 
 const currentImage = computed(() => ocrStore.currentImage);
 
@@ -176,10 +199,10 @@ const displayZoom = computed(() => {
   return Math.round(zoom * 100) + "%";
 });
 
-const handleOcr = async () => {
+const handleOcr = () => {
   if (!currentImage.value) return;
   const image = currentImage.value;
-  await ocrStore.runOcrTask(image.id, image.file, (_prev, next) => ({
+  taskStore.startOcrForImage(image, (_prev, next) => ({
     ...next,
     details: next.details.map((detail) => ({
       ...detail,
@@ -576,6 +599,15 @@ useEventListener(window, "keydown", (event: KeyboardEvent) => {
     event.stopPropagation();
     toggleTextSidebarCollapse();
     return;
+  }
+
+  if (event.key === "Escape") {
+    // 当全局文本音频序列播放器打开时，按下 ESC 关闭
+    if (sequencePlayerVisible.value) {
+      event.preventDefault();
+      event.stopPropagation();
+      sequencePlayerVisible.value = false;
+    }
   }
 });
 </script>

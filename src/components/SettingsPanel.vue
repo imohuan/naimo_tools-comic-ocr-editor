@@ -1,124 +1,240 @@
 <template>
-  <div class="settings-panel">
-    <n-form label-placement="top" size="medium" :show-feedback="false">
-      <div class="form-grid">
-        <!-- 检测配置 -->
-        <n-form-item label="检测分辨率">
-          <n-select
-            v-model:value="config.detector.detection_size"
-            :options="detectionSizeOptions"
-            placeholder="请选择检测分辨率"
-          />
-        </n-form-item>
+  <div class="space-y-4 text-sm text-gray-600">
+    <div class="text-xs text-gray-400">
+      调整 OCR、翻译、修复与任务等运行参数
+    </div>
 
-        <n-form-item label="文本检测器">
-          <n-select
-            v-model:value="config.detector.detector"
-            :options="detectorOptions"
-            placeholder="请选择文本检测器"
-          />
-        </n-form-item>
-
-        <n-form-item label="Box阈值">
-          <n-input-number
-            v-model:value="config.detector.box_threshold"
-            :precision="1"
-            :min="0"
-            :max="1"
-            :step="0.1"
-            :show-button="false"
-            placeholder="Box阈值"
-            style="width: 100%"
-          />
-        </n-form-item>
-
-        <n-form-item label="Unclip比率">
-          <n-input-number
-            v-model:value="config.detector.unclip_ratio"
-            :precision="1"
-            :min="0"
-            :step="0.1"
-            :show-button="false"
-            placeholder="Unclip比率"
-            style="width: 100%"
-          />
-        </n-form-item>
-
-        <!-- 渲染配置 -->
-        <n-form-item label="渲染方向">
-          <n-select
-            v-model:value="config.render.direction"
-            :options="directionOptions"
-            placeholder="请选择渲染方向"
-          />
-        </n-form-item>
-
-        <!-- 翻译配置 -->
-        <n-form-item label="翻译器">
-          <n-select
-            v-model:value="config.translator.translator"
-            :options="translatorOptions"
-            placeholder="请选择翻译器"
-          />
-        </n-form-item>
-
-        <n-form-item label="目标语言">
-          <n-select
-            v-model:value="config.translator.target_lang"
-            :options="targetLangOptions"
-            placeholder="请选择目标语言"
-          />
-        </n-form-item>
-
-        <!-- 修复配置 -->
-        <n-form-item label="修复尺寸">
-          <n-select
-            v-model:value="config.inpainter.inpainting_size"
-            :options="inpaintingSizeOptions"
-            placeholder="请选择修复尺寸"
-          />
-        </n-form-item>
-
-        <n-form-item label="修复器">
-          <n-select
-            v-model:value="config.inpainter.inpainter"
-            :options="inpainterOptions"
-            placeholder="请选择修复器"
-          />
-        </n-form-item>
-
-        <n-form-item label="遮罩扩展偏移">
-          <n-input-number
-            v-model:value="config.mask_dilation_offset"
-            :min="0"
-            :step="1"
-            :show-button="false"
-            placeholder="遮罩扩展偏移"
-            style="width: 100%"
-          />
-        </n-form-item>
+    <div class="grid gap-4 md:grid-cols-3 auto-rows-min items-start">
+      <!-- 检测配置 -->
+      <div class="col-span-full text-xs font-semibold text-gray-500 mb-1">
+        检测配置
       </div>
 
-      <!-- 操作按钮 -->
-      <div class="action-section">
-        <n-button @click="handleCancel" size="large">取消</n-button>
-        <n-button type="primary" @click="handleSave" size="large"
-          >保存</n-button
+      <label class="flex flex-col gap-1 text-xs text-gray-500">
+        <span class="text-[13px] font-medium text-gray-700">检测分辨率</span>
+        <select
+          v-model.number="config.detector.detection_size"
+          class="w-full rounded-md border border-gray-200 bg-white px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-400"
         >
+          <option
+            v-for="option in detectionSizeOptions"
+            :key="option.value"
+            :value="option.value"
+          >
+            {{ option.label }}
+          </option>
+        </select>
+      </label>
+
+      <label class="flex flex-col gap-1 text-xs text-gray-500">
+        <span class="text-[13px] font-medium text-gray-700">文本检测器</span>
+        <select
+          v-model="config.detector.detector"
+          class="w-full rounded-md border border-gray-200 bg-white px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-400"
+        >
+          <option
+            v-for="option in detectorOptions"
+            :key="option.value"
+            :value="option.value"
+          >
+            {{ option.label }}
+          </option>
+        </select>
+      </label>
+
+      <label class="flex flex-col gap-1 text-xs text-gray-500">
+        <span class="text-[13px] font-medium text-gray-700">Box 阈值</span>
+        <input
+          v-model.number="config.detector.box_threshold"
+          type="number"
+          step="0.1"
+          min="0"
+          max="1"
+          class="w-full rounded-md border border-gray-200 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-400"
+        />
+      </label>
+
+      <label class="flex flex-col gap-1 text-xs text-gray-500">
+        <span class="text-[13px] font-medium text-gray-700">Unclip 比率</span>
+        <input
+          v-model.number="config.detector.unclip_ratio"
+          type="number"
+          step="0.1"
+          min="0"
+          class="w-full rounded-md border border-gray-200 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-400"
+        />
+      </label>
+
+      <!-- 渲染配置 -->
+      <div class="col-span-full mt-2 text-xs font-semibold text-gray-500 mb-1">
+        渲染配置
       </div>
-    </n-form>
+
+      <label class="flex flex-col gap-1 text-xs text-gray-500">
+        <span class="text-[13px] font-medium text-gray-700">渲染方向</span>
+        <select
+          v-model="config.render.direction"
+          class="w-full rounded-md border border-gray-200 bg-white px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-400"
+        >
+          <option
+            v-for="option in directionOptions"
+            :key="option.value"
+            :value="option.value"
+          >
+            {{ option.label }}
+          </option>
+        </select>
+      </label>
+
+      <!-- 翻译配置 -->
+      <div class="col-span-full mt-2 text-xs font-semibold text-gray-500 mb-1">
+        翻译配置
+      </div>
+
+      <label class="flex flex-col gap-1 text-xs text-gray-500">
+        <span class="text-[13px] font-medium text-gray-700">翻译器</span>
+        <select
+          v-model="config.translator.translator"
+          class="w-full rounded-md border border-gray-200 bg-white px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-400"
+        >
+          <option
+            v-for="option in translatorOptions"
+            :key="option.value"
+            :value="option.value"
+          >
+            {{ option.label }}
+          </option>
+        </select>
+      </label>
+
+      <label class="flex flex-col gap-1 text-xs text-gray-500">
+        <span class="text-[13px] font-medium text-gray-700">目标语言</span>
+        <select
+          v-model="config.translator.target_lang"
+          class="w-full rounded-md border border-gray-200 bg-white px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-400"
+        >
+          <option
+            v-for="option in targetLangOptions"
+            :key="option.value"
+            :value="option.value"
+          >
+            {{ option.label }}
+          </option>
+        </select>
+      </label>
+
+      <!-- 修复配置 -->
+      <div class="col-span-full mt-2 text-xs font-semibold text-gray-500 mb-1">
+        修复配置
+      </div>
+
+      <label class="flex flex-col gap-1 text-xs text-gray-500">
+        <span class="text-[13px] font-medium text-gray-700">修复尺寸</span>
+        <select
+          v-model.number="config.inpainter.inpainting_size"
+          class="w-full rounded-md border border-gray-200 bg-white px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-400"
+        >
+          <option
+            v-for="option in inpaintingSizeOptions"
+            :key="option.value"
+            :value="option.value"
+          >
+            {{ option.label }}
+          </option>
+        </select>
+      </label>
+
+      <label class="flex flex-col gap-1 text-xs text-gray-500">
+        <span class="text-[13px] font-medium text-gray-700">修复器</span>
+        <select
+          v-model="config.inpainter.inpainter"
+          class="w-full rounded-md border border-gray-200 bg-white px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-400"
+        >
+          <option
+            v-for="option in inpainterOptions"
+            :key="option.value"
+            :value="option.value"
+          >
+            {{ option.label }}
+          </option>
+        </select>
+      </label>
+
+      <label class="flex flex-col gap-1 text-xs text-gray-500">
+        <span class="text-[13px] font-medium text-gray-700">遮罩扩展偏移</span>
+        <input
+          v-model.number="config.mask_dilation_offset"
+          type="number"
+          min="0"
+          step="1"
+          class="w-full rounded-md border border-gray-200 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-400"
+        />
+      </label>
+
+      <!-- 任务与音频 -->
+      <div class="col-span-full mt-2 text-xs font-semibold text-gray-500 mb-1">
+        任务与音频
+      </div>
+
+      <div class="col-span-full space-y-2">
+        <div class="mb-1 text-[13px] font-medium text-gray-700">
+          音频并发数量
+        </div>
+        <p class="text-[11px] text-gray-400 mb-1">
+          并发越高占用越大，请根据机器性能合理选择
+        </p>
+        <div class="flex flex-wrap items-center gap-2">
+          <button
+            v-for="value in audioConcurrencyOptions"
+            :key="value"
+            type="button"
+            class="px-3 py-1 rounded border text-xs transition-colors"
+            :class="
+              taskStore.audioConcurrency === value
+                ? 'bg-blue-500 text-white border-blue-500 shadow-sm'
+                : 'border-gray-200 text-gray-600 hover:bg-gray-50'
+            "
+            @click="taskStore.setAudioConcurrency(value)"
+          >
+            {{ value }}
+          </button>
+        </div>
+      </div>
+    </div>
+
+    <!-- 底部操作区域：右下角对齐 -->
+    <div
+      class="pt-4 mt-2 border-t border-dashed border-gray-200 flex justify-end gap-2"
+    >
+      <button
+        type="button"
+        class="px-4 py-2 rounded-md border border-gray-200 text-gray-600 hover:bg-gray-50 transition-colors"
+        @click="handleCancel"
+      >
+        取消
+      </button>
+      <button
+        type="button"
+        class="px-4 py-2 rounded-md bg-blue-500 text-white hover:bg-blue-600 transition-colors shadow-sm"
+        @click="handleSave"
+      >
+        保存
+      </button>
+    </div>
   </div>
 </template>
 
 <script setup lang="ts">
 import { ref, onMounted } from "vue";
-import { NForm, NFormItem, NSelect, NInputNumber, NButton } from "naive-ui";
 import { getOcrConfig, saveOcrConfig } from "../utils/config";
 import type { OcrConfig } from "../types";
+import { useTaskStore } from "../stores/taskStore";
 
 const emits = defineEmits<{
   close: [];
 }>();
+
+const taskStore = useTaskStore();
 
 const config = ref<OcrConfig>({
   detector: {
@@ -214,6 +330,8 @@ const inpainterOptions = [
   { label: "Original", value: "original" },
 ];
 
+const audioConcurrencyOptions = [1, 2, 3, 5, 8];
+
 const handleSave = async () => {
   try {
     await saveOcrConfig(config.value);
@@ -232,45 +350,3 @@ onMounted(async () => {
   config.value = savedConfig;
 });
 </script>
-
-<style scoped>
-.settings-panel {
-  max-height: 80vh;
-  overflow-y: auto;
-  background: #ffffff;
-}
-
-.form-grid {
-  display: grid;
-  grid-template-columns: repeat(2, 1fr);
-  gap: 20px;
-}
-
-.action-section {
-  display: flex;
-  justify-content: flex-end;
-  gap: 12px;
-  margin-top: 24px;
-  padding-top: 20px;
-  border-top: 1px solid #f0f0f0;
-}
-
-/* 滚动条样式 */
-.settings-panel::-webkit-scrollbar {
-  width: 8px;
-}
-
-.settings-panel::-webkit-scrollbar-track {
-  background: #f5f5f5;
-  border-radius: 4px;
-}
-
-.settings-panel::-webkit-scrollbar-thumb {
-  background: #d9d9d9;
-  border-radius: 4px;
-}
-
-.settings-panel::-webkit-scrollbar-thumb:hover {
-  background: #bfbfbf;
-}
-</style>

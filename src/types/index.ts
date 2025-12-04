@@ -1,4 +1,7 @@
+// OCR 文本明细
 export interface OcrTextDetail {
+  // 唯一标识，用于任务管理和跨组件精确更新
+  id?: string;
   text: string;
   // 翻译后的文本（默认与 text 同步，用于右侧编辑区域）
   translatedText?: string;

@@ -46,6 +46,32 @@ export const useOcrStore = defineStore("ocr-store", () => {
       .slice(2, 10)}`;
   };
 
+  // 生成 OCR 明细的唯一 ID（与图片 ID 分开，方便任务管理）
+  const generateDetailId = (): string => {
+    if (typeof crypto !== "undefined" && "randomUUID" in crypto) {
+      return crypto.randomUUID();
+    }
+    return `detail_${Date.now().toString(36)}_${Math.random()
+      .toString(36)
+      .slice(2, 10)}`;
+  };
+
+  // 为 OCR 结果中的所有明细补充 id（已有 id 则保持不变）
+  const ensureDetailIds = (result: OcrTextResult | null): OcrTextResult | null => {
+    if (!result || !Array.isArray(result.details)) return result;
+    const detailsWithId = result.details.map((detail) => {
+      if (detail.id) return detail;
+      return {
+        ...detail,
+        id: generateDetailId(),
+      } as OcrTextDetail;
+    });
+    return {
+      ...result,
+      details: detailsWithId,
+    };
+  };
+
   // 添加图片
   const addImages = (files: File[]) => {
     files.forEach((file) => {
@@ -84,14 +110,14 @@ export const useOcrStore = defineStore("ocr-store", () => {
   // 设置当前图片 OCR 结果
   const setCurrentOcrResult = (result: OcrTextResult | null) => {
     if (!currentImage.value) return;
-    currentImage.value.ocrResult = result;
+    currentImage.value.ocrResult = ensureDetailIds(result);
   };
 
   // 按 imageId 设置指定图片的 OCR 结果（避免异步结果错位）
   const setOcrResultById = (imageId: string, result: OcrTextResult | null) => {
     const target = findImageById(imageId);
     if (!target) return;
-    target.ocrResult = result;
+    target.ocrResult = ensureDetailIds(result);
   };
 
   // 更新当前图片的某条 OCR 明细
@@ -116,7 +142,10 @@ export const useOcrStore = defineStore("ocr-store", () => {
     if (!currentImage.value?.ocrResult) return;
     currentImage.value.ocrResult = {
       ...currentImage.value.ocrResult,
+      details: ensureDetailIds({
+      ...currentImage.value.ocrResult,
       details: [...details],
+      })!.details,
     };
   };
 
@@ -188,7 +217,7 @@ export const useOcrStore = defineStore("ocr-store", () => {
       // 第二次查找：请求返回时再次确认图片仍然存在（中途可能被删除）
       const target = findImageById(imageId) || imageRef;
       const merged = applyResult(target.ocrResult, normalizedResult);
-      target.ocrResult = merged;
+      target.ocrResult = ensureDetailIds(merged);
     } catch (error) {
       console.error("OCR 请求失败:", error);
     } finally {

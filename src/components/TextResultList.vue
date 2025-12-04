@@ -100,13 +100,13 @@
             :key="item.__key"
             :detail="item"
             :index="index"
-            ref="itemRefs"
+            :progress="getDetailProgress(item.id)"
             :voice-role-options="voiceRoleOptions"
             @update-translated="handleChangeTranslated"
             @update-origin="handleChangeOrigin"
             @update-voice-role="handleChangeVoiceRole"
             @delete-detail="handleDeleteDetail"
-            @update-audio-state="handleUpdateAudioState"
+            @generate-audio="handleGenerateAudio"
           />
         </VueDraggable>
 
@@ -125,9 +125,7 @@
         <div
           class="inline-flex items-stretch h-8 rounded-md overflow-hidden"
           :class="
-            batchRunning
-              ? 'bg-red-500 text-white'
-              : !canBatchRun
+            !canBatchRun
               ? 'bg-gray-300 text-gray-500'
               : 'bg-blue-500 text-white'
           "
@@ -136,47 +134,17 @@
           <button
             class="flex-1 flex items-center gap-1 px-3 text-xs font-medium"
             :class="{
-              'cursor-pointer hover:bg-blue-600': canBatchRun && !batchRunning,
-              'cursor-pointer hover:bg-red-600': batchRunning,
-              'cursor-not-allowed opacity-60': !canBatchRun && !batchRunning,
+              'cursor-pointer hover:bg-blue-600': canBatchRun,
+              'cursor-not-allowed opacity-60': !canBatchRun,
             }"
-            :disabled="!canBatchRun && !batchRunning"
-            @click="
-              batchRunning ? handleStopBatchAudio() : handleStartBatchAudio()
-            "
+            :disabled="!canBatchRun"
+            @click="handleStartBatchAudio"
             type="button"
           >
-            <!-- 图标：未运行时为播放图标，运行中为加载中的圆环 -->
-            <svg
-              v-if="!batchRunning"
-              class="w-3.5 h-3.5"
-              viewBox="0 0 24 24"
-              fill="currentColor"
-            >
+            <svg class="w-3.5 h-3.5" viewBox="0 0 24 24" fill="currentColor">
               <path d="M8 5v14l11-7z" />
             </svg>
-            <svg
-              v-else
-              class="w-3.5 h-3.5 animate-spin"
-              viewBox="0 0 24 24"
-              fill="none"
-              stroke="currentColor"
-              stroke-width="2"
-            >
-              <circle
-                class="opacity-25"
-                cx="12"
-                cy="12"
-                r="10"
-                stroke="currentColor"
-              />
-              <path
-                class="opacity-75"
-                d="M4 12a8 8 0 0 1 8-8"
-                stroke="currentColor"
-              />
-            </svg>
-            <span>{{ batchRunning ? "停止" : "批量音频" }}</span>
+            <span>批量音频</span>
           </button>
 
           <!-- 右侧批量模式下拉 -->
@@ -191,12 +159,10 @@
               <button
                 class="flex items-center justify-center px-2 text-xs border-l border-white/20"
                 :class="{
-                  'cursor-pointer hover:bg-blue-600':
-                    !batchRunning && (canBatchRun || batchRunning),
-                  'cursor-not-allowed opacity-60':
-                    batchRunning || (!canBatchRun && !batchRunning),
+                  'cursor-pointer hover:bg-blue-600': canBatchRun,
+                  'cursor-not-allowed opacity-60': !canBatchRun,
                 }"
-                :disabled="batchRunning || (!canBatchRun && !batchRunning)"
+                :disabled="!canBatchRun"
                 type="button"
               >
                 <svg
@@ -247,26 +213,6 @@
                   >当前</span
                 >
               </button>
-
-              <div class="mt-2 pt-1 border-t border-dashed border-gray-200">
-                <div class="mb-1 text-[11px] text-gray-500">并发数量</div>
-                <div class="flex items-center gap-1">
-                  <button
-                    v-for="n in concurrencyOptions"
-                    :key="n"
-                    type="button"
-                    class="px-2 py-0.5 rounded text-[11px] border"
-                    :class="
-                      concurrency === n
-                        ? 'bg-blue-500 text-white border-blue-500'
-                        : 'bg-white text-gray-700 border-gray-300 hover:bg-gray-100'
-                    "
-                    @click="concurrency = n"
-                  >
-                    {{ n }}
-                  </button>
-                </div>
-              </div>
             </div>
           </n-popover>
         </div>
@@ -317,6 +263,7 @@ import { VueDraggable } from "vue-draggable-plus";
 import { storeToRefs } from "pinia";
 import type { ImageItem, OcrTextDetail } from "../types";
 import { useOcrStore } from "../stores/ocrStore";
+import { useTaskStore } from "../stores/taskStore";
 import TextResultItem from "./TextResultItem.vue";
 import { NPopover } from "naive-ui";
 import { getImageDimensions, getImageDimensionsFromUrl } from "../utils/image";
@@ -337,11 +284,9 @@ const emit = defineEmits<{
 const { isCollapsed, width } = toRefs(props);
 
 const ocrStore = useOcrStore();
+const taskStore = useTaskStore();
 const { canUndoDetails, canRedoDetails } = storeToRefs(ocrStore);
 const currentImage = computed(() => ocrStore.currentImage);
-
-type TextResultItemInstance = InstanceType<typeof TextResultItem> | null;
-const itemRefs = ref<TextResultItemInstance[]>([]);
 
 const isResizing = ref(false);
 const resizeStartX = ref(0);
@@ -407,7 +352,9 @@ watch(
     syncingFromStore.value = true;
     detailsSource.value = (val || []).map((d, index) => ({
       ...(d as any),
-      __key: `${index}-${d.minX}-${d.minY}-${d.maxX}-${d.maxY}-${d.text}`,
+      __key: `${(d as any).id || index}-${d.minX}-${d.minY}-${d.maxX}-${
+        d.maxY
+      }-${d.text}`,
     }));
     // 下一轮 tick 再允许本地变更同步回 Store，避免本次 watch 触发的变更再次写回
     nextTick(() => {
@@ -493,29 +440,26 @@ const handleDeleteDetail = (detailIndex: number) => {
   detailsSource.value = list;
 };
 
-// 更新某条 OCR 结果的音频生成状态（写回到 Store）
-const handleUpdateAudioState = (
-  detailIndex: number,
-  payload: Partial<OcrTextDetail>
-) => {
-  const list = [...(detailsSource.value || [])];
-  const target = list[detailIndex];
-  if (!target) return;
+// 单条音频生成：委托任务 Store 处理
+const handleGenerateAudio = (detailIndex: number) => {
+  const image = currentImage.value;
+  if (!image?.ocrResult?.details?.length) return;
+  const detail = (detailsSource.value || [])[detailIndex] as
+    | (OcrTextDetail & { id?: string })
+    | undefined;
+  if (!detail?.id) return;
+  taskStore.startAudioForDetail(image.id, detail.id);
+};
 
-  list[detailIndex] = {
-    ...target,
-    ...payload,
-  };
-  detailsSource.value = list;
+const getDetailProgress = (detailId?: string) => {
+  if (!detailId) return { loading: false, error: null };
+  return taskStore.getProgressByKey(detailId);
 };
 
 // 批量音频生成：仅处理当前图片的文本结果
 const batchMode = ref<"skipDone" | "forceAll">("skipDone");
-const batchRunning = ref(false);
 const batchDropdownVisible = ref(false);
 // 并发控制
-const concurrencyOptions = [1, 2, 3, 5, 8];
-const concurrency = ref(2);
 
 // 播放器状态（本地仅做按钮 loading / 错误提示，全局播放交给 App 控制）
 const playerLoading = ref(false);
@@ -523,16 +467,20 @@ const playerError = ref<string | null>(null);
 
 // 是否存在文本（用于控制按钮是否可用）
 const canBatchRun = computed(() => {
-  return hasDetails.value;
+  return taskStore.canBatchAudio && hasDetails.value;
 });
 
 const allAudioReady = computed(() => {
   const list =
     (detailsSource.value as Array<
-      OcrTextDetail & { audioLoading?: boolean }
+      OcrTextDetail & { id?: string; audioLoading?: boolean }
     >) || [];
   if (!list.length) return false;
-  return list.every((detail) => detail?.audioUrl && !detail.audioLoading);
+  return list.every((detail) => {
+    const progress = detail.id ? taskStore.getProgressByKey(detail.id) : null;
+    const loading = progress?.loading ?? false;
+    return detail?.audioUrl && !loading;
+  });
 });
 
 const canPlaySequence = computed(() => {
@@ -544,61 +492,9 @@ const handleSelectBatchMode = (key: "skipDone" | "forceAll") => {
   batchDropdownVisible.value = false;
 };
 
-// 内部执行批量音频生成逻辑（按并发数量调用子项的 generateAudio）
-const runBatchAudioInternal = async () => {
-  const list = detailsSource.value || [];
-  if (!list.length) return;
-
-  // 预先计算需要处理的索引
-  const indexes: number[] = [];
-  list.forEach((detail, idx) => {
-    if (!detail) return;
-    if (batchMode.value === "skipDone" && detail.audioUrl) {
-      return;
-    }
-    indexes.push(idx);
-  });
-
-  if (!indexes.length) return;
-
-  batchRunning.value = true;
-
-  let cursor = 0;
-  const workerCount = Math.max(1, Math.min(concurrency.value, indexes.length));
-
-  const worker = async () => {
-    while (cursor < indexes.length && batchRunning.value) {
-      const current = cursor++;
-      const idx = indexes[current];
-      const comp = itemRefs.value[idx];
-      if (comp && typeof comp.generateAudio === "function") {
-        try {
-          await comp.generateAudio();
-        } catch {
-          // 单条失败不影响整体批量任务，错误由子组件内部处理
-        }
-      }
-    }
-  };
-
-  const tasks: Promise<void>[] = [];
-  for (let i = 0; i < workerCount; i++) {
-    tasks.push(worker());
-  }
-
-  await Promise.all(tasks);
-
-  batchRunning.value = false;
-};
-
-const handleStartBatchAudio = async () => {
-  if (!canBatchRun.value || batchRunning.value) return;
-  await runBatchAudioInternal();
-};
-
-const handleStopBatchAudio = () => {
-  if (!batchRunning.value) return;
-  batchRunning.value = false;
+const handleStartBatchAudio = () => {
+  if (!canBatchRun.value) return;
+  taskStore.startBatchAudioForCurrentImage(batchMode.value);
 };
 
 const resolveImageSize = async (image: ImageItem) => {

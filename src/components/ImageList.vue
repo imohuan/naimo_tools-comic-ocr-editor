@@ -186,37 +186,11 @@
         <button
           class="w-8 h-8 flex items-center justify-center rounded-md text-white bg-blue-500 hover:bg-blue-600 transition-colors disabled:opacity-60 disabled:cursor-not-allowed"
           type="button"
-          :disabled="!canBatchRun && !batchRunning"
-          @click="batchRunning ? handleStopBatchOcr() : handleStartBatchOcr()"
+          :disabled="!canBatchExecute"
+          @click="handleBatchExecute"
         >
-          <svg
-            v-if="!batchRunning"
-            class="w-3.5 h-3.5"
-            viewBox="0 0 24 24"
-            fill="currentColor"
-          >
+          <svg class="w-3.5 h-3.5" viewBox="0 0 24 24" fill="currentColor">
             <path d="M8 5v14l11-7z" />
-          </svg>
-          <svg
-            v-else
-            class="w-3.5 h-3.5 animate-spin"
-            viewBox="0 0 24 24"
-            fill="none"
-            stroke="currentColor"
-            stroke-width="2"
-          >
-            <circle
-              class="opacity-25"
-              cx="12"
-              cy="12"
-              r="10"
-              stroke="currentColor"
-            />
-            <path
-              class="opacity-75"
-              d="M4 12a8 8 0 0 1 8-8"
-              stroke="currentColor"
-            />
           </svg>
         </button>
       </div>
@@ -226,9 +200,7 @@
         v-else
         class="inline-flex items-stretch h-8 rounded-md overflow-hidden"
         :class="
-          batchRunning
-            ? 'bg-red-500 text-white'
-            : !canBatchRun
+          !canBatchExecute
             ? 'bg-gray-300 text-gray-500'
             : 'bg-blue-500 text-white'
         "
@@ -237,45 +209,17 @@
         <button
           class="flex-1 flex items-center gap-1 px-3 text-xs font-medium"
           :class="{
-            'cursor-pointer hover:bg-blue-600': canBatchRun && !batchRunning,
-            'cursor-pointer hover:bg-red-600': batchRunning,
-            'cursor-not-allowed opacity-60': !canBatchRun && !batchRunning,
+            'cursor-pointer hover:bg-blue-600': canBatchExecute,
+            'cursor-not-allowed opacity-60': !canBatchExecute,
           }"
-          :disabled="!canBatchRun && !batchRunning"
-          @click="batchRunning ? handleStopBatchOcr() : handleStartBatchOcr()"
+          :disabled="!canBatchExecute"
+          @click="handleBatchExecute"
           type="button"
         >
-          <!-- 左侧图标：未运行时为播放图标，运行中为加载中的圆环 -->
-          <svg
-            v-if="!batchRunning"
-            class="w-3.5 h-3.5"
-            viewBox="0 0 24 24"
-            fill="currentColor"
-          >
+          <svg class="w-3.5 h-3.5" viewBox="0 0 24 24" fill="currentColor">
             <path d="M8 5v14l11-7z" />
           </svg>
-          <svg
-            v-else
-            class="w-3.5 h-3.5 animate-spin"
-            viewBox="0 0 24 24"
-            fill="none"
-            stroke="currentColor"
-            stroke-width="2"
-          >
-            <circle
-              class="opacity-25"
-              cx="12"
-              cy="12"
-              r="10"
-              stroke="currentColor"
-            />
-            <path
-              class="opacity-75"
-              d="M4 12a8 8 0 018-8"
-              stroke="currentColor"
-            />
-          </svg>
-          <span>{{ batchRunning ? "停止" : "批量 OCR" }}</span>
+          <span>批量 执行</span>
         </button>
 
         <!-- 右侧触发区域：使用 Naive Popover 展示自定义内容 -->
@@ -290,12 +234,10 @@
             <button
               class="flex items-center justify-center px-2 text-xs border-l border-white/20"
               :class="{
-                'cursor-pointer hover:bg-blue-600':
-                  !batchRunning && (canBatchRun || batchRunning),
-                'cursor-not-allowed opacity-60':
-                  batchRunning || (!canBatchRun && !batchRunning),
+                'cursor-pointer hover:bg-blue-600': canBatchRun,
+                'cursor-not-allowed opacity-60': !canBatchRun,
               }"
-              :disabled="batchRunning || (!canBatchRun && !batchRunning)"
+              :disabled="!canBatchRun"
               type="button"
             >
               <svg
@@ -312,8 +254,8 @@
             </button>
           </template>
 
-          <div class="px-3 py-2 text-xs text-gray-700 space-y-1 w-56">
-            <div class="font-medium mb-1">批量 OCR 模式</div>
+          <div class="px-3 py-2 text-xs text-gray-700 space-y-2 w-56">
+            <div class="font-medium mb-1">批量 执行</div>
 
             <button
               class="w-full flex items-center justify-between px-2 py-1 rounded hover:bg-gray-100 transition-colors"
@@ -323,7 +265,7 @@
               type="button"
               @click="handleSelectBatchMode('skipDone')"
             >
-              <span>仅未 OCR 图片</span>
+              <span>仅未完成任务</span>
               <span
                 v-if="batchMode === 'skipDone'"
                 class="text-blue-500 text-[10px]"
@@ -339,13 +281,68 @@
               type="button"
               @click="handleSelectBatchMode('forceAll')"
             >
-              <span>强制所有图片 OCR</span>
+              <span>强制全部任务</span>
               <span
                 v-if="batchMode === 'forceAll'"
                 class="text-blue-500 text-[10px]"
                 >当前</span
               >
             </button>
+
+            <div class="pt-2 mt-1 border-t border-gray-200 space-y-1">
+              <div
+                class="font-medium text-gray-800 flex items-center justify-between"
+              >
+                <span>执行内容</span>
+                <span
+                  v-if="!hasBatchAction"
+                  class="text-[10px] text-red-500 font-normal"
+                  >至少选择一项</span
+                >
+              </div>
+
+              <n-checkbox
+                size="small"
+                :checked="isBatchOcrSelected"
+                @update:checked="handleCheckboxChange('ocr', $event)"
+                class="batch-option"
+              >
+                <div class="flex flex-col leading-tight text-gray-700">
+                  <div class="flex items-center justify-between">
+                    <span>执行 OCR</span>
+                    <span
+                      v-if="isBatchOcrSelected"
+                      class="text-blue-500 text-[10px]"
+                      >已启用</span
+                    >
+                  </div>
+                  <p class="text-[10px] text-gray-400 mt-0.5">
+                    按模式处理「仅未完成任务」或「强制全部任务」
+                  </p>
+                </div>
+              </n-checkbox>
+
+              <n-checkbox
+                size="small"
+                :checked="isBatchAudioSelected"
+                @update:checked="handleCheckboxChange('audio', $event)"
+                class="batch-option"
+              >
+                <div class="flex flex-col leading-tight text-gray-700">
+                  <div class="flex items-center justify-between">
+                    <span>执行音频生成</span>
+                    <span
+                      v-if="isBatchAudioSelected"
+                      class="text-blue-500 text-[10px]"
+                      >已启用</span
+                    >
+                  </div>
+                  <p class="text-[10px] text-gray-400 mt-0.5">
+                    若同时勾选 OCR，将在识别完成后自动加入音频队列
+                  </p>
+                </div>
+              </n-checkbox>
+            </div>
           </div>
         </n-popover>
       </div>
@@ -370,7 +367,7 @@
         <svg v-else class="w-3.5 h-3.5" viewBox="0 0 24 24" fill="currentColor">
           <path d="M8 5v14l11-7z" />
         </svg>
-        <span>{{ playerLoading ? "准备中" : "序列播放" }}</span>
+        <span>{{ playerLoading ? "准备中" : "播放" }}</span>
       </button>
 
       <span v-if="playerError" class="ml-3 text-[11px] text-red-500">
@@ -382,14 +379,16 @@
 
 <script setup lang="ts">
 import { ref, computed, toRefs } from "vue";
-import { NPopover } from "naive-ui";
+import { NPopover, NCheckbox } from "naive-ui";
 import { useOcrStore } from "../stores/ocrStore";
+import { useTaskStore } from "../stores/taskStore";
 import type { ImageItem, OcrTextDetail } from "../types";
 import { getImageDimensions, getImageDimensionsFromUrl } from "../utils/image";
 import { uiEventBus } from "../core/event-bus";
 import type { SequencePlaybackItem } from "./AudioSequencePlayer.vue";
 
 const store = useOcrStore();
+const taskStore = useTaskStore();
 const props = defineProps<{
   isCollapsed: boolean;
 }>();
@@ -446,13 +445,15 @@ const removeImage = (index: number) => {
 const images = computed(() => store.images);
 const currentIndex = computed(() => store.currentIndex);
 
-// 批量 OCR 模式：仅处理未 OCR / 强制全部 OCR
+// 批量 OCR 模式：仅处理未 OCR / 强制全部 OCR（UI 状态）
 const batchMode = ref<"skipDone" | "forceAll">("skipDone");
-// 是否正在批量执行
-const batchRunning = ref(false);
-// 下一个待处理的图片索引
-const nextBatchIndex = ref(0);
-
+type BatchAction = "ocr" | "audio";
+const batchActions = ref<BatchAction[]>(["ocr"]);
+const isBatchOcrSelected = computed(() => batchActions.value.includes("ocr"));
+const isBatchAudioSelected = computed(() =>
+  batchActions.value.includes("audio")
+);
+const hasBatchAction = computed(() => batchActions.value.length > 0);
 // Popover 显隐
 const batchDropdownVisible = ref(false);
 
@@ -462,10 +463,23 @@ const handleSelectBatchMode = (key: "skipDone" | "forceAll") => {
   batchDropdownVisible.value = false;
 };
 
+const handleCheckboxChange = (action: BatchAction, checked: boolean) => {
+  const next = new Set(batchActions.value);
+  if (checked) {
+    next.add(action);
+  } else {
+    next.delete(action);
+  }
+  batchActions.value = Array.from(next);
+};
+
 // 是否存在图片（用于控制按钮是否可用，仅在完全无图片时禁用）
 const canBatchRun = computed(() => {
-  return !!(images.value && images.value.length > 0);
+  return taskStore.canBatchOcr;
 });
+const canBatchExecute = computed(
+  () => canBatchRun.value && hasBatchAction.value
+);
 
 // 序列播放（针对所有图片，仅维护按钮 loading / 错误状态）
 const playerLoading = ref(false);
@@ -476,11 +490,15 @@ const allAudioReady = computed(() => {
   const list = (images.value || []) as ImageItem[];
   if (!list.length) return false;
 
-  const allDetails: (OcrTextDetail & { audioLoading?: boolean })[] = [];
+  const allDetails: (OcrTextDetail & {
+    id?: string;
+    audioLoading?: boolean;
+  })[] = [];
   list.forEach((image) => {
     if (image?.ocrResult?.details?.length) {
       allDetails.push(
         ...(image.ocrResult.details as (OcrTextDetail & {
+          id?: string;
           audioLoading?: boolean;
         })[])
       );
@@ -488,7 +506,11 @@ const allAudioReady = computed(() => {
   });
 
   if (!allDetails.length) return false;
-  return allDetails.every((detail) => detail.audioUrl && !detail.audioLoading);
+  return allDetails.every((detail) => {
+    const progress = detail.id ? taskStore.getProgressByKey(detail.id) : null;
+    const loading = progress?.loading ?? false;
+    return detail.audioUrl && !loading;
+  });
 });
 
 const canPlaySequence = computed(() => {
@@ -572,53 +594,34 @@ const handleOpenPlayback = async () => {
   }
 };
 
-// 内部：执行实际批量 OCR 逻辑（从 nextBatchIndex 开始，逐个执行）
-const runBatchOcrInternal = async () => {
-  const list = images.value || [];
-  if (list.length === 0) return;
+// 执行批量任务
+const handleBatchExecute = () => {
+  if (!canBatchExecute.value) return;
+  const wantsOcr = isBatchOcrSelected.value;
+  const wantsAudio = isBatchAudioSelected.value;
 
-  batchRunning.value = true;
-
-  for (let i = nextBatchIndex.value; i < list.length; i++) {
-    nextBatchIndex.value = i;
-
-    const img = list[i];
-    // 只处理图片文件存在的项
-    if (!img || !img.file) {
-      continue;
-    }
-
-    // 普通模式：跳过已经有 OCR 结果的图片
-    if (batchMode.value === "skipDone" && img.ocrResult) {
-      continue;
-    }
-
-    // 如果在循环中被要求停止，则直接退出
-    if (!batchRunning.value) {
-      nextBatchIndex.value = i;
+  if (wantsAudio) {
+    if (!wantsOcr) {
+      taskStore.startBatchAudioForAllImages(batchMode.value);
       return;
     }
 
-    // 逐张执行 OCR，结果总是以最新结果为准
-    await store.runOcrTask(img.id, img.file, (_prev, next) => next);
+    if (batchMode.value === "skipDone") {
+      taskStore.startBatchAudioForAllImages("skipDone");
+    }
   }
 
-  // 执行完成后重置状态
-  batchRunning.value = false;
-  nextBatchIndex.value = 0;
-};
-
-// 点击开始批量 OCR
-const handleStartBatchOcr = async () => {
-  if (!canBatchRun.value || batchRunning.value) return;
-  nextBatchIndex.value = 0;
-  await runBatchOcrInternal();
-};
-
-// 点击停止批量 OCR（当前图片请求结束后不再继续后续）
-const handleStopBatchOcr = () => {
-  if (!batchRunning.value) return;
-  batchRunning.value = false;
+  if (wantsOcr) {
+    taskStore.startBatchOcr(
+      batchMode.value,
+      wantsAudio
+        ? {
+            withAudio: true,
+            audioMode: batchMode.value,
+          }
+        : undefined
+    );
+  }
 };
 </script>
 
