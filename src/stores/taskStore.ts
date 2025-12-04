@@ -92,6 +92,42 @@ export const useTaskStore = defineStore("task-store", () => {
     return progressStates.value[key] || defaultProgressState;
   };
 
+  // 检查特定detail是否在等待队列中
+  const isPendingAudioTask = (detailId: string): boolean => {
+    return tasks.value.some(task =>
+      task.kind === 'audio' &&
+      task.detailId === detailId &&
+      task.status === 'pending'
+    );
+  };
+
+  // 检查特定image是否在OCR等待队列中
+  const isPendingOcrTask = (imageId: string): boolean => {
+    return tasks.value.some(task =>
+      task.kind === 'ocr' &&
+      task.imageId === imageId &&
+      task.status === 'pending'
+    );
+  };
+
+  // 检查特定detail是否已有音频任务（等待中或运行中）
+  const hasAudioTask = (detailId: string): boolean => {
+    return tasks.value.some(task =>
+      task.kind === 'audio' &&
+      task.detailId === detailId &&
+      (task.status === 'pending' || task.status === 'running')
+    );
+  };
+
+  // 检查特定image是否已有OCR任务（等待中或运行中）
+  const hasOcrTask = (imageId: string): boolean => {
+    return tasks.value.some(task =>
+      task.kind === 'ocr' &&
+      task.imageId === imageId &&
+      (task.status === 'pending' || task.status === 'running')
+    );
+  };
+
   const addTask = (partial: Omit<TaskItem, "id" | "createdAt" | "updatedAt">) => {
     const now = Date.now();
     const task: TaskItem = {
@@ -238,6 +274,33 @@ export const useTaskStore = defineStore("task-store", () => {
     return true;
   };
 
+  // 删除特定detail的音频任务（等待中或运行中）
+  const cancelAudioTask = (detailId: string): boolean => {
+    // 先检查等待中的任务
+    const pendingTask = tasks.value.find(task =>
+      task.kind === 'audio' &&
+      task.detailId === detailId &&
+      task.status === 'pending'
+    );
+
+    if (pendingTask) {
+      return cancelPendingTask(pendingTask.id);
+    }
+
+    // 再检查运行中的任务
+    const runningTask = tasks.value.find(task =>
+      task.kind === 'audio' &&
+      task.detailId === detailId &&
+      task.status === 'running'
+    );
+
+    if (runningTask) {
+      return stopTask(runningTask.id);
+    }
+
+    return false;
+  };
+
   const setAudioConcurrency = (value: number) => {
     const next = Math.max(1, value);
     audioConcurrency.value = next;
@@ -308,8 +371,8 @@ export const useTaskStore = defineStore("task-store", () => {
             error?.name === "AbortError"
               ? "任务已取消"
               : typeof error?.message === "string"
-              ? error.message
-              : "生成音频失败";
+                ? error.message
+                : "生成音频失败";
           setTaskProgress(detailId, {
             loading: false,
             error: msg,
@@ -338,6 +401,27 @@ export const useTaskStore = defineStore("task-store", () => {
   };
 
   const startAudioForDetail = (imageId: string, detailId: string) => {
+    // 检查是否已存在该detail的音频任务（等待中或运行中）
+    if (hasAudioTask(detailId)) {
+      // 如果是等待中的任务，取消并替换
+      const existingPendingTask = tasks.value.find(task =>
+        task.kind === 'audio' &&
+        task.detailId === detailId &&
+        task.status === 'pending'
+      );
+
+      if (existingPendingTask) {
+        cancelPendingTask(existingPendingTask.id);
+        // 创建新任务替换
+        const runner = createAudioRunner(imageId, detailId);
+        if (!runner) return;
+        enqueueRunner(runner);
+      }
+      // 如果是运行中的任务，不做任何操作，不允许重复添加
+      return;
+    }
+
+    // 没有现有任务，直接创建新任务
     const runner = createAudioRunner(imageId, detailId);
     if (!runner) return;
     enqueueRunner(runner);
@@ -407,6 +491,26 @@ export const useTaskStore = defineStore("task-store", () => {
     applyResult: OcrApplyResultFn,
     options?: OcrRunnerOptions
   ) => {
+    // 检查是否已存在该image的OCR任务（等待中或运行中）
+    if (hasOcrTask(image.id)) {
+      // 如果是等待中的任务，取消并替换
+      const existingPendingTask = tasks.value.find(task =>
+        task.kind === 'ocr' &&
+        task.imageId === image.id &&
+        task.status === 'pending'
+      );
+
+      if (existingPendingTask) {
+        cancelPendingTask(existingPendingTask.id);
+        // 创建新任务替换
+        const runner = createOcrRunner(image, applyResult, options);
+        enqueueRunner(runner);
+      }
+      // 如果是运行中的任务，不做任何操作，不允许重复添加
+      return;
+    }
+
+    // 没有现有任务，直接创建新任务
     const runner = createOcrRunner(image, applyResult, options);
     enqueueRunner(runner);
   };
@@ -425,21 +529,21 @@ export const useTaskStore = defineStore("task-store", () => {
         (_prev, next) => next,
         options
           ? {
-              ...options,
-              audioMode: options.audioMode || mode,
-            }
+            ...options,
+            audioMode: options.audioMode || mode,
+          }
           : undefined
       );
     });
   };
 
-const startBatchAudioForCurrentImage = (
-  mode: "skipDone" | "forceAll" = "skipDone"
-) => {
-  const image = ocrStore.currentImage;
-  if (!image) return;
-  startBatchAudioForImage(image.id, mode);
-};
+  const startBatchAudioForCurrentImage = (
+    mode: "skipDone" | "forceAll" = "skipDone"
+  ) => {
+    const image = ocrStore.currentImage;
+    if (!image) return;
+    startBatchAudioForImage(image.id, mode);
+  };
 
   const canBatchOcr = computed(() => ocrStore.images.length > 0);
   const canBatchAudio = computed(() => {
@@ -469,6 +573,12 @@ const startBatchAudioForCurrentImage = (
     clearTasks,
     setAudioConcurrency,
     getProgressByKey,
+    isPendingAudioTask,
+    isPendingOcrTask,
+    hasAudioTask,
+    hasOcrTask,
+    cancelAudioTask,
+    clearTaskProgress,
   };
 });
 

@@ -74,34 +74,87 @@
             </n-popover>
           </div>
           <!-- 生成音频按钮 -->
-          <button
-            type="button"
-            class="w-7 h-7 p-0 rounded-md text-gray-500 hover:text-emerald-600 hover:bg-emerald-50 transition-colors flex items-center justify-center flex-shrink-0 disabled:opacity-60 disabled:cursor-default"
-            aria-label="生成音频"
-            :disabled="audioLoading"
-            @click="handleGenerateAudio"
-          >
-            <!-- 加载中：小圆环 spinner -->
-            <div
-              v-if="audioLoading"
-              class="w-3.5 h-3.5 border-2 border-emerald-500 border-t-transparent rounded-full animate-spin"
-            ></div>
-            <!-- 默认播放图标 -->
-            <svg
-              v-else
-              viewBox="0 0 24 24"
-              class="w-3.5 h-3.5"
-              fill="none"
-              stroke="currentColor"
-              stroke-width="1.8"
+          <div class="relative group">
+            <button
+              type="button"
+              class="w-7 h-7 p-0 rounded-md transition-colors flex items-center justify-center flex-shrink-0 disabled:opacity-60 disabled:cursor-default"
+              :class="
+                audioLoading
+                  ? 'text-blue-600 bg-blue-50 hover:bg-red-100 hover:text-red-600 cursor-pointer'
+                  : isPending
+                  ? 'text-orange-600 bg-orange-50 hover:bg-red-100 hover:text-red-600 cursor-pointer'
+                  : hasTask
+                  ? 'text-gray-400 bg-gray-50 cursor-not-allowed'
+                  : 'text-gray-500 hover:text-emerald-600 hover:bg-emerald-50'
+              "
+              :aria-label="audioLoading ? '点击取消任务' : isPending ? '点击取消等待' : hasTask ? '运行中' : '生成音频'"
+              :disabled="hasTask && !audioLoading && !isPending"
+              @click="handleGenerateAudio"
             >
-              <path
-                stroke-linecap="round"
-                stroke-linejoin="round"
-                d="M8 5v14l11-7-11-7z"
-              />
-            </svg>
-          </button>
+              <!-- 加载中：小圆环 spinner -->
+              <div
+                v-if="audioLoading"
+                class="w-3.5 h-3.5 border-2 border-current border-t-transparent rounded-full animate-spin group-hover:opacity-0 transition-opacity"
+              ></div>
+              <!-- 等待中：时钟图标 -->
+              <svg
+                v-else-if="isPending"
+                viewBox="0 0 24 24"
+                class="w-3.5 h-3.5 group-hover:opacity-0 transition-opacity"
+                fill="none"
+                stroke="currentColor"
+                stroke-width="1.8"
+              >
+                <circle cx="12" cy="12" r="10"></circle>
+                <polyline points="12 6 12 12 16 14"></polyline>
+              </svg>
+              <!-- 运行中：暂停图标 -->
+              <svg
+                v-else-if="hasTask"
+                viewBox="0 0 24 24"
+                class="w-3.5 h-3.5"
+                fill="none"
+                stroke="currentColor"
+                stroke-width="1.8"
+              >
+                <rect x="6" y="4" width="4" height="16"></rect>
+                <rect x="14" y="4" width="4" height="16"></rect>
+              </svg>
+              <!-- 默认播放图标 -->
+              <svg
+                v-else
+                viewBox="0 0 24 24"
+                class="w-3.5 h-3.5"
+                fill="none"
+                stroke="currentColor"
+                stroke-width="1.8"
+              >
+                <path
+                  stroke-linecap="round"
+                  stroke-linejoin="round"
+                  d="M8 5v14l11-7-11-7z"
+                />
+              </svg>
+            </button>
+
+            <!-- Hover时显示的删除图标（仅在加载中或等待中状态显示） -->
+            <div
+              v-if="audioLoading || isPending"
+              class="absolute inset-0 flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity pointer-events-none"
+            >
+              <svg
+                viewBox="0 0 24 24"
+                class="w-3.5 h-3.5"
+                fill="none"
+                stroke="currentColor"
+                stroke-width="1.8"
+              >
+                <circle cx="12" cy="12" r="10"></circle>
+                <line x1="15" y1="9" x2="9" y2="15"></line>
+                <line x1="9" y1="9" x2="15" y2="15"></line>
+              </svg>
+            </div>
+          </div>
           <button
             type="button"
             class="w-7 h-7 p-0 rounded-md text-gray-500 hover:text-red-500 hover:bg-red-50 transition-colors flex items-center justify-center flex-shrink-0"
@@ -196,6 +249,7 @@
 import { ref, watch, computed } from "vue";
 import { NInput, NPopover } from "naive-ui";
 import type { OcrTextDetail } from "../types";
+import { useTaskStore } from "../stores/taskStore";
 
 interface Props {
   detail: OcrTextDetail;
@@ -218,7 +272,19 @@ interface Emits {
 const props = defineProps<Props>();
 const emit = defineEmits<Emits>();
 
+const taskStore = useTaskStore();
+
 const audioLoading = computed(() => props.progress?.loading ?? false);
+
+// 检查是否在等待队列中
+const isPending = computed(() => {
+  return props.detail.id ? taskStore.isPendingAudioTask(props.detail.id) : false;
+});
+
+// 检查是否已有任务（等待中或运行中）
+const hasTask = computed(() => {
+  return props.detail.id ? taskStore.hasAudioTask(props.detail.id) : false;
+});
 
 // 文本字段有可能是对象（如 { CHS, zh }），统一转成字符串
 const normalizeText = (value: unknown): string => {
@@ -304,8 +370,21 @@ const toggleOrigin = () => {
   showOrigin.value = !showOrigin.value;
 };
 
-// 生成音频请求交给上层 / 任务 Store 处理
+// 处理音频按钮点击
 const handleGenerateAudio = async () => {
+  // 如果在等待中或加载中状态，点击删除任务
+  if ((isPending.value || audioLoading.value) && props.detail.id) {
+    const cancelled = taskStore.cancelAudioTask(props.detail.id);
+    if (cancelled) {
+      // 清除对应的进度状态
+      taskStore.clearTaskProgress(props.detail.id);
+      // 更新detail的音频状态
+      emit("update-voice-role", props.index, props.detail.voiceRole || null);
+    }
+    return;
+  }
+
+  // 正常生成音频
   emit("generate-audio", props.index);
 };
 

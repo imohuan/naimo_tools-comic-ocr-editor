@@ -145,7 +145,7 @@
         <!-- OCR状态指示 / 加载中指示 -->
         <div
           v-if="image.ocrLoading"
-          class="absolute bottom-1 left-1 bg-white/90 text-gray-700 text-xs px-1.5 py-0.5 rounded flex items-center justify-center"
+          class="absolute bottom-1 left-1 bg-white/90 text-blue-600 text-xs px-1.5 py-0.5 rounded flex items-center justify-center"
         >
           <svg
             class="w-3 h-3 animate-spin"
@@ -166,6 +166,36 @@
               d="M4 12a8 8 0 018-8"
               stroke="currentColor"
             />
+          </svg>
+        </div>
+        <div
+          v-else-if="isImagePendingOcr(image)"
+          class="absolute bottom-1 left-1 bg-orange-500 text-white text-xs px-1.5 py-0.5 rounded flex items-center justify-center"
+        >
+          <svg
+            class="w-3 h-3"
+            viewBox="0 0 24 24"
+            fill="none"
+            stroke="currentColor"
+            stroke-width="2"
+          >
+            <circle cx="12" cy="12" r="10"></circle>
+            <polyline points="12 6 12 12 16 14"></polyline>
+          </svg>
+        </div>
+        <div
+          v-else-if="hasImageOcrTask(image)"
+          class="absolute bottom-1 left-1 bg-purple-500 text-white text-xs px-1.5 py-0.5 rounded flex items-center justify-center"
+        >
+          <svg
+            class="w-3 h-3"
+            viewBox="0 0 24 24"
+            fill="none"
+            stroke="currentColor"
+            stroke-width="2"
+          >
+            <rect x="6" y="4" width="4" height="16"></rect>
+            <rect x="14" y="4" width="4" height="16"></rect>
           </svg>
         </div>
         <div
@@ -446,6 +476,16 @@ const removeImage = (index: number) => {
 
 const images = computed(() => store.images);
 const currentIndex = computed(() => store.currentIndex);
+
+// 检查图片是否在OCR等待队列中
+const isImagePendingOcr = (image: ImageItem) => {
+  return image.id ? taskStore.isPendingOcrTask(image.id) : false;
+};
+
+// 检查图片是否已有OCR任务（等待中或运行中）
+const hasImageOcrTask = (image: ImageItem) => {
+  return image.id ? taskStore.hasOcrTask(image.id) : false;
+};
 
 // 批量 OCR 模式：仅处理未 OCR / 强制全部 OCR（UI 状态）
 const batchMode = ref<"skipDone" | "forceAll">("skipDone");
