@@ -1,5 +1,14 @@
 import type { OcrTextResult } from "../types";
 
+ const clamp = (value: number, max: number) => {
+  if (Number.isNaN(value) || !Number.isFinite(value)) {
+    return 0;
+  }
+  if (value < 0) return 0;
+  if (value > max) return max;
+  return value;
+};
+
 export const normalizeOcrResult = (
   result: OcrTextResult,
   width: number,
@@ -9,23 +18,12 @@ export const normalizeOcrResult = (
     return result;
   }
 
-  const longerSide = Math.max(width, height);
-  const detectionSize = result.detection_size || longerSide;
-  const processedScale =
-    longerSide > detectionSize ? detectionSize / longerSide : 1;
-
-  const processedWidth = width * processedScale;
-  const processedHeight = height * processedScale;
-
-  const scaleX = processedWidth > 0 ? width / processedWidth : 1;
-  const scaleY = processedHeight > 0 ? height / processedHeight : 1;
-
   const normalizedDetails = result.details.map((detail) => ({
     ...detail,
-    minX: detail.minX * scaleX,
-    maxX: detail.maxX * scaleX,
-    minY: detail.minY * scaleY,
-    maxY: detail.maxY * scaleY,
+    minX: clamp(detail.minX, width),
+    maxX: clamp(detail.maxX, width),
+    minY: clamp(detail.minY, height),
+    maxY: clamp(detail.maxY, height),
   }));
 
   return {

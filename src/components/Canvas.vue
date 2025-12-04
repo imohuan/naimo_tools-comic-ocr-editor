@@ -193,11 +193,11 @@ const loadImageWithOcr = async (
   image?: File | string,
   ocrResult?: OcrTextResult | null
 ) => {
-  // 先清空画布
-  clearCanvas();
-
+  
   // 没有图片时直接返回
   if (!image) {
+    // 先清空画布
+    clearCanvas();
     return;
   }
 

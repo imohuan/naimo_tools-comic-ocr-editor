@@ -331,6 +331,7 @@ const handleWaitingRectComplete = async (rect: {
     );
 
     if (!imageCoords) {
+      canvasRef.value.removeWaitingRect(rect.waitingRect);
       console.error("无法转换坐标");
       return;
     }

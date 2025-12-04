@@ -104,7 +104,10 @@ export function useOcr() {
 
                   ocrResult = {
                     details: jsonData.translations.map((trans: any) => {
-                      const translatedText = pickText(trans.text, targetLang);
+                      let translatedText = pickText(trans.text, targetLang);
+                      // 删除 translatedText 所有标点符号，只保留英文中文数字，其他的内容替换成空格，并且如果出现多个空格的话统一替换成一个空格
+                      translatedText = translatedText.replace(/[^\u4e00-\u9fa5a-zA-Z0-9\s]/g, " ").replace(/\s+/g, " ");
+
                       const originFromText = pickText(
                         trans.text,
                         undefined,
