@@ -12,6 +12,7 @@ export interface ImageFileInfo {
 export interface ProjectConfig {
   images: {
     [imagePath: string]: {
+      processedImagePath?: string;
       ocrResult: OcrTextDetail[];
     };
   };
@@ -334,6 +335,44 @@ export const useNaimoStore = defineStore('naimo', () => {
   };
 
   /**
+   * 保存处理后的图片到本地
+   */
+  const saveProcessedImage = async (imagePath: string, processedImageUrl: string): Promise<string | null> => {
+    if (!currentFolder.value || !isAvailable.value) {
+      return null;
+    }
+
+    try {
+      const api = window.myPluginAPI;
+      if (!api) {
+        throw new Error('API 不存在');
+      }
+      const result = await api.saveProcessedImage(currentFolder.value, imagePath, processedImageUrl);
+      return result;
+    } catch (err: any) {
+      error.value = err.message || '保存处理图片失败';
+      return null;
+    }
+  };
+
+  /**
+   * 获取处理图片 URL
+   */
+  const getProcessedImageUrl = async (processedImagePath: string): Promise<string | null> => {
+    if (!currentFolder.value || !isAvailable.value) {
+      return null;
+    }
+
+    try {
+      const api = window.myPluginAPI;
+      return await api.getProcessedImageUrl(currentFolder.value, processedImagePath);
+    } catch (err: any) {
+      error.value = err.message || '获取处理图片 URL 失败';
+      return null;
+    }
+  };
+
+  /**
    * 关闭项目
    */
   const closeProject = () => {
@@ -367,6 +406,8 @@ export const useNaimoStore = defineStore('naimo', () => {
     getAudioUrl,
     saveAudioFileInfo,
     getAudioFilePath,
+    saveProcessedImage,
+    getProcessedImageUrl,
     closeProject,
   };
 });

@@ -894,12 +894,10 @@ export interface ProjectConfig {
 	/** 图片配置映射 */
 	images: {
 		[imagePath: string]: {
+			/** 处理后的图片文件路径 */
+			processedImagePath?: string;
 			/** OCR 识别结果 */
 			ocrResult: any;
-			/** 音频文件映射（detailId -> audioFilePath） */
-			audioFiles?: {
-				[detailId: string]: string;
-			};
 		};
 	};
 	/** 配置版本号 */
@@ -1028,6 +1026,21 @@ export interface MyPluginAPI {
 	 * @returns 音频文件路径，如果不存在则返回 null
 	 */
 	getAudioFilePath(folderPath: string, imagePath: string, detailId: string): Promise<string | null>;
+	/**
+	 * 保存处理后的图片到本地
+	 * @param folderPath 项目文件夹路径
+	 * @param imagePath 原始图片文件路径
+	 * @param processedImageUrl 处理后的图片 URL（可以是 HTTP URL、data URL 或 blob URL）
+	 * @returns 保存的图片文件路径，如果保存失败则返回 null
+	 */
+	saveProcessedImage(folderPath: string, imagePath: string, processedImageUrl: string): Promise<string | null>;
+	/**
+	 * 获取处理图片的 URL（从本地文件路径读取并创建 data URL）
+	 * @param folderPath 项目文件夹路径
+	 * @param processedImagePath 处理图片的文件路径（绝对或相对项目目录）
+	 * @returns 图片的 data URL，如果获取失败则返回 null
+	 */
+	getProcessedImageUrl(folderPath: string, processedImagePath: string): Promise<string | null>;
 }
 
 declare global {

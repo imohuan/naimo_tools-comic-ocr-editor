@@ -14,6 +14,9 @@ export const useOcrStore = defineStore("ocr-store", () => {
   // 图片及其 OCR 结果列表
   const images = ref<ImageItem[]>([]);
 
+  // 存储每个图片的 processedImagePath（imagePath -> processedImagePath）
+  const processedImagePathMap = ref<Map<string, string>>(new Map());
+
   const naimoStore = useNaimoStore();
 
   // 将 ImageItem[] 序列化为 ProjectConfig 格式
@@ -32,7 +35,10 @@ export const useOcrStore = defineStore("ocr-store", () => {
     for (const image of toRaw(imageList)) {
       if (!image.path) continue;
       // 保存 ocrResult，即使为 null 也要保存（表示已处理但无结果）
+      // 从映射中获取已保存的 processedImagePath
+      const savedPath = processedImagePathMap.value.get(image.path) || "";
       config.images[image.path] = {
+        processedImagePath: savedPath,
         ocrResult: image.ocrResult?.details.map(detail => getOcrResult(detail)) ?? [],
       };
     }
@@ -53,8 +59,17 @@ export const useOcrStore = defineStore("ocr-store", () => {
       if (!img.path) return img;
       const configItem = config.images[img.path];
       if (configItem) {
+        // 从配置中恢复 processedImageUrl（如果有 processedImagePath）
+        let processedImageUrl: string | null = null;
+        if (configItem.processedImagePath) {
+          // 将路径保存到映射中
+          processedImagePathMap.value.set(img.path, configItem.processedImagePath);
+          processedImageUrl = await naimoStore.getProcessedImageUrl(configItem.processedImagePath) || null;
+        }
+
         return {
           ...img,
+          processedImageUrl,
           // 从配置中恢复 ocrResult（可能是 null，表示已处理但无结果）
           ocrResult: configItem.ocrResult.length > 0 ? {
             details: await Promise.all(configItem.ocrResult.map(async (detail) => {
@@ -304,11 +319,13 @@ export const useOcrStore = defineStore("ocr-store", () => {
 
         // 只有在未显式禁用更新时才替换图片
         if (options?.updateProcessedImage !== false) {
+          let finalImageUrl = imageUrl;
+
           if (options?.patchArea) {
             // 如果提供了 patchArea，则进行局部替换
             const baseImage = target.processedImageUrl || target.url;
             try {
-              const newImageUrl = await compositeImages(
+              finalImageUrl = await compositeImages(
                 baseImage,
                 imageUrl,
                 options.patchArea.x,
@@ -316,13 +333,26 @@ export const useOcrStore = defineStore("ocr-store", () => {
                 options.patchArea.width,
                 options.patchArea.height
               );
-              target.processedImageUrl = newImageUrl;
             } catch (error) {
               console.error("图片合成失败:", error);
             }
-          } else {
-            // 否则直接替换整张图片
-            target.processedImageUrl = imageUrl;
+          }
+
+          // 设置处理后的图片 URL
+          target.processedImageUrl = finalImageUrl;
+
+          // 如果是项目模式，保存处理后的图片到本地
+          if (naimoStore.isProjectMode && target.path && finalImageUrl) {
+            try {
+              const savedPath = await naimoStore.saveProcessedImage(target.path, finalImageUrl);
+              if (savedPath) {
+                // 将路径保存到映射中，以便序列化时使用
+                processedImagePathMap.value.set(target.path, savedPath);
+                console.log('[runOcrTask] 处理图片已保存到本地:', savedPath);
+              }
+            } catch (error) {
+              console.error('[runOcrTask] 保存处理图片失败:', error);
+            }
           }
         }
       };

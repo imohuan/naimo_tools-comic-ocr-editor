@@ -51,7 +51,7 @@ export function useStoreToJSON<T = any>(
       isLoading.value = true;
       error.value = null;
 
-      const api = (window as any).myPluginAPI;
+      const api = window.myPluginAPI;
       if (!api) {
         throw new Error('API 不可用');
       }
@@ -65,7 +65,14 @@ export function useStoreToJSON<T = any>(
           onRead(data);
         }
         return data;
+      } else if (deserializer) {
+        const data = await deserializer(config)
+        if (onRead) {
+          onRead(data);
+        }
+        return data
       }
+
 
       return null;
     } catch (err: any) {

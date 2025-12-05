@@ -26,6 +26,8 @@ export default defineConfig({
         'electron',
         'https',
         'crypto',
+        "fs/promises",
+        "path"
       ],
       output: {
         format: 'cjs',
