@@ -1,0 +1,22 @@
+{
+  "$schema": "./schema.json",
+  "id": "comic-ocr-editor",
+  "name": "漫画OCR编辑器",
+  "version": "1.0.0",
+  "author": "",
+  "icon": "./ico.png",
+  "description": "漫画小说OCR识别和编辑工具，支持批量上传图片、绘制OCR框、配置识别参数",
+  "category": "other",
+  "enabled": true,
+  "main": "./index.html",
+  "preload": "./preload.js",
+  "feature": [
+    {
+      "path": "editor",
+      "name": "OCR编辑器",
+      "icon": "./ico.png",
+      "description": "打开OCR编辑器",
+      "type": "text"
+    }
+  ]
+}
