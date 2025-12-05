@@ -1,7 +1,8 @@
-import { defineStore } from 'pinia';
-import { ref, computed } from 'vue';
-import type { Naimo } from '../../typings/naimo';
-import type { OcrTextResult, OcrTextDetail } from '../types';
+import { defineStore } from "pinia";
+import { ref, computed, watch } from "vue";
+import { useLocalStorage } from "@vueuse/core";
+import type { Naimo } from "../../typings/naimo";
+import type { OcrTextResult, OcrTextDetail } from "../types";
 
 export interface ImageFileInfo {
   path: string;
@@ -25,14 +26,16 @@ export interface ProjectConfig {
  * Naimo API Store
  * 提供 naimo API 实例、可用性检查和所有项目相关功能
  */
-export const useNaimoStore = defineStore('naimo', () => {
+export const useNaimoStore = defineStore("naimo", () => {
   /**
    * 检查 naimo 是否可用
    */
   const isAvailable = computed(() => {
-    return typeof window !== 'undefined' &&
+    return (
+      typeof window !== "undefined" &&
       (window as any).naimo !== undefined &&
-      (window as any).naimo !== null;
+      (window as any).naimo !== null
+    );
   });
 
   /**
@@ -54,13 +57,13 @@ export const useNaimoStore = defineStore('naimo', () => {
   ): Promise<T | null> => {
     const naimo = getNaimo();
     if (!naimo) {
-      console.warn('Naimo API 不可用，当前运行在浏览器模式');
+      console.warn("Naimo API 不可用，当前运行在浏览器模式");
       return null;
     }
     try {
       return await callback(naimo);
     } catch (error) {
-      console.error('Electron 操作失败:', error);
+      console.error("Electron 操作失败:", error);
       throw error;
     }
   };
@@ -68,7 +71,7 @@ export const useNaimoStore = defineStore('naimo', () => {
   // ==================== 项目相关状态 ====================
 
   // 当前选中的文件夹路径
-  const currentFolder = ref<string | null>(null);
+  const currentFolder = useLocalStorage<string | null>("naimo-current-folder", null);
   // 当前文件夹中的图片文件
   const folderImages = ref<ImageFileInfo[]>([]);
   // 配置加载状态
@@ -88,7 +91,7 @@ export const useNaimoStore = defineStore('naimo', () => {
    */
   const selectFolder = async (): Promise<boolean> => {
     if (!isAvailable.value) {
-      error.value = '浏览器模式不支持文件夹操作';
+      error.value = "浏览器模式不支持文件夹操作";
       return false;
     }
 
@@ -101,14 +104,28 @@ export const useNaimoStore = defineStore('naimo', () => {
       }
 
       currentFolder.value = folderPath;
-      await loadFolderImages();
       error.value = null;
       return true;
     } catch (err: any) {
-      error.value = err.message || '选择文件夹失败';
+      error.value = err.message || "选择文件夹失败";
       return false;
     }
   };
+
+  /**
+   * 初始化时根据本地记录加载文件夹图片
+   * 以及在可用状态或文件夹变化时自动刷新
+   */
+  const stopInitialWatch = watch(
+    [isAvailable, currentFolder],
+    ([available, folder]) => {
+      if (available && folder) {
+        loadFolderImages();
+        stopInitialWatch();
+      }
+    },
+    { immediate: true }
+  );
 
   /**
    * 加载文件夹中的图片
@@ -125,7 +142,7 @@ export const useNaimoStore = defineStore('naimo', () => {
       const images = await api.getImagesInFolder(currentFolder.value);
       folderImages.value = images;
     } catch (err: any) {
-      error.value = err.message || '加载图片失败';
+      error.value = err.message || "加载图片失败";
       folderImages.value = [];
     } finally {
       configLoading.value = false;
@@ -144,7 +161,7 @@ export const useNaimoStore = defineStore('naimo', () => {
       const api = window.myPluginAPI;
       return await api.readConfig(currentFolder.value);
     } catch (err: any) {
-      error.value = err.message || '读取配置失败';
+      error.value = err.message || "读取配置失败";
       return null;
     }
   };
@@ -161,18 +178,18 @@ export const useNaimoStore = defineStore('naimo', () => {
       configLoading.value = true;
       const api = window.myPluginAPI;
       if (!api) {
-        throw new Error('API 不存在');
+        throw new Error("API 不存在");
       }
       const success = await api.writeConfig(currentFolder.value, config);
 
       if (!success) {
-        throw new Error('写入配置失败');
+        throw new Error("写入配置失败");
       }
 
       error.value = null;
       return true;
     } catch (err: any) {
-      error.value = err.message || '写入配置失败';
+      error.value = err.message || "写入配置失败";
       return false;
     } finally {
       configLoading.value = false;
@@ -182,7 +199,10 @@ export const useNaimoStore = defineStore('naimo', () => {
   /**
    * 保存 OCR 结果
    */
-  const saveOcrResult = async (imagePath: string, ocrResult: OcrTextResult): Promise<boolean> => {
+  const saveOcrResult = async (
+    imagePath: string,
+    ocrResult: OcrTextResult
+  ): Promise<boolean> => {
     if (!currentFolder.value || !isAvailable.value) {
       return false;
     }
@@ -190,18 +210,18 @@ export const useNaimoStore = defineStore('naimo', () => {
     try {
       const api = window.myPluginAPI;
       if (!api) {
-        throw new Error('API 不存在');
+        throw new Error("API 不存在");
       }
       const success = await api.saveOcrResult(currentFolder.value, imagePath, ocrResult);
 
       if (!success) {
-        throw new Error('保存 OCR 结果失败');
+        throw new Error("保存 OCR 结果失败");
       }
 
       error.value = null;
       return true;
     } catch (err: any) {
-      error.value = err.message || '保存 OCR 结果失败';
+      error.value = err.message || "保存 OCR 结果失败";
       return false;
     }
   };
@@ -218,7 +238,7 @@ export const useNaimoStore = defineStore('naimo', () => {
       const api = window.myPluginAPI;
       return await api.getOcrResult(currentFolder.value, imagePath);
     } catch (err: any) {
-      error.value = err.message || '获取 OCR 结果失败';
+      error.value = err.message || "获取 OCR 结果失败";
       return null;
     }
   };
@@ -236,14 +256,14 @@ export const useNaimoStore = defineStore('naimo', () => {
     }
   ): Promise<Buffer | null> => {
     if (!isAvailable.value) {
-      throw new Error('浏览器模式不支持音频生成');
+      throw new Error("浏览器模式不支持音频生成");
     }
 
     try {
       const api = window.myPluginAPI;
       return await api.generateAudioWithEdgeTTS(text, options);
     } catch (err: any) {
-      error.value = err.message || '音频生成失败';
+      error.value = err.message || "音频生成失败";
       return null;
     }
   };
@@ -251,7 +271,10 @@ export const useNaimoStore = defineStore('naimo', () => {
   /**
    * 保存音频文件
    */
-  const saveAudioFile = async (detailId: string, audioBuffer: Buffer): Promise<string | null> => {
+  const saveAudioFile = async (
+    detailId: string,
+    audioBuffer: Buffer
+  ): Promise<string | null> => {
     if (!currentFolder.value || !isAvailable.value) {
       return null;
     }
@@ -259,12 +282,12 @@ export const useNaimoStore = defineStore('naimo', () => {
     try {
       const api = window.myPluginAPI;
       if (!api) {
-        throw new Error('API 不存在');
+        throw new Error("API 不存在");
       }
       const result = await api.saveAudioFile(currentFolder.value, detailId, audioBuffer);
       return result;
     } catch (err: any) {
-      error.value = err.message || '保存音频文件失败';
+      error.value = err.message || "保存音频文件失败";
       return null;
     }
   };
@@ -281,7 +304,7 @@ export const useNaimoStore = defineStore('naimo', () => {
       const api = window.myPluginAPI;
       return await api.getAudioUrl(currentFolder.value, audioFilePath);
     } catch (err: any) {
-      error.value = err.message || '获取音频 URL 失败';
+      error.value = err.message || "获取音频 URL 失败";
       return null;
     }
   };
@@ -301,18 +324,23 @@ export const useNaimoStore = defineStore('naimo', () => {
     try {
       const api = window.myPluginAPI;
       if (!api) {
-        throw new Error('API 不存在');
+        throw new Error("API 不存在");
       }
-      const success = await api.saveAudioFileInfo(currentFolder.value, imagePath, detailId, audioFilePath);
+      const success = await api.saveAudioFileInfo(
+        currentFolder.value,
+        imagePath,
+        detailId,
+        audioFilePath
+      );
 
       if (!success) {
-        throw new Error('保存音频信息失败');
+        throw new Error("保存音频信息失败");
       }
 
       error.value = null;
       return true;
     } catch (err: any) {
-      error.value = err.message || '保存音频信息失败';
+      error.value = err.message || "保存音频信息失败";
       return false;
     }
   };
@@ -320,7 +348,10 @@ export const useNaimoStore = defineStore('naimo', () => {
   /**
    * 获取音频文件路径
    */
-  const getAudioFilePath = async (imagePath: string, detailId: string): Promise<string | null> => {
+  const getAudioFilePath = async (
+    imagePath: string,
+    detailId: string
+  ): Promise<string | null> => {
     if (!currentFolder.value || !isAvailable.value) {
       return null;
     }
@@ -329,7 +360,7 @@ export const useNaimoStore = defineStore('naimo', () => {
       const api = window.myPluginAPI;
       return await api.getAudioFilePath(currentFolder.value, imagePath, detailId);
     } catch (err: any) {
-      error.value = err.message || '获取音频文件路径失败';
+      error.value = err.message || "获取音频文件路径失败";
       return null;
     }
   };
@@ -337,7 +368,10 @@ export const useNaimoStore = defineStore('naimo', () => {
   /**
    * 保存处理后的图片到本地
    */
-  const saveProcessedImage = async (imagePath: string, processedImageUrl: string): Promise<string | null> => {
+  const saveProcessedImage = async (
+    imagePath: string,
+    processedImageUrl: string
+  ): Promise<string | null> => {
     if (!currentFolder.value || !isAvailable.value) {
       return null;
     }
@@ -345,12 +379,16 @@ export const useNaimoStore = defineStore('naimo', () => {
     try {
       const api = window.myPluginAPI;
       if (!api) {
-        throw new Error('API 不存在');
+        throw new Error("API 不存在");
       }
-      const result = await api.saveProcessedImage(currentFolder.value, imagePath, processedImageUrl);
+      const result = await api.saveProcessedImage(
+        currentFolder.value,
+        imagePath,
+        processedImageUrl
+      );
       return result;
     } catch (err: any) {
-      error.value = err.message || '保存处理图片失败';
+      error.value = err.message || "保存处理图片失败";
       return null;
     }
   };
@@ -358,7 +396,9 @@ export const useNaimoStore = defineStore('naimo', () => {
   /**
    * 获取处理图片 URL
    */
-  const getProcessedImageUrl = async (processedImagePath: string): Promise<string | null> => {
+  const getProcessedImageUrl = async (
+    processedImagePath: string
+  ): Promise<string | null> => {
     if (!currentFolder.value || !isAvailable.value) {
       return null;
     }
@@ -367,7 +407,7 @@ export const useNaimoStore = defineStore('naimo', () => {
       const api = window.myPluginAPI;
       return await api.getProcessedImageUrl(currentFolder.value, processedImagePath);
     } catch (err: any) {
-      error.value = err.message || '获取处理图片 URL 失败';
+      error.value = err.message || "获取处理图片 URL 失败";
       return null;
     }
   };
@@ -383,7 +423,7 @@ export const useNaimoStore = defineStore('naimo', () => {
       const api = window.myPluginAPI;
       return await api.getImageUrl(imagePath);
     } catch (err: any) {
-      error.value = err.message || '获取图片失败';
+      error.value = err.message || "获取图片失败";
       return null;
     }
   };

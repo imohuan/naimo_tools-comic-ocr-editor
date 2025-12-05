@@ -138,7 +138,7 @@
       v-show="sequencePlayerVisible"
     >
       <!-- 右上角添加一个关闭按钮，点击关闭弹窗 -->
-      <button
+      <!-- <button
         class="absolute right-3 top-3 z-10 w-8 h-8 flex items-center justify-center rounded-full bg-black/30 text-white hover:bg-black/60 transition"
         @click="sequencePlayerVisible = false"
         aria-label="关闭"
@@ -154,6 +154,13 @@
       </button>
 
       <div class="w-[95vw] h-[90vh] max-w-[1600px] max-h-[900px]">
+        <AudioSequencePlayer
+          :model-value="sequencePlayerVisible"
+          :playlist="sequencePlayerPlaylist"
+        />
+      </div> -->
+
+      <div class="w-full h-full">
         <AudioSequencePlayer
           :model-value="sequencePlayerVisible"
           :playlist="sequencePlayerPlaylist"
@@ -229,9 +236,9 @@ const originalImage = computed<string | File>(() => {
 
 // 计算当前应该显示的图片（优先使用处理好的图片）
 const displayImage = computed<string | File>(() => {
-  return (
-    currentImage.value?.processedImageUrl || originalImage.value || ""
-  ) as string | File;
+  return (currentImage.value?.processedImageUrl || originalImage.value || "") as
+    | string
+    | File;
 });
 
 // 防御性：在 store 尚未就绪时避免 length 访问报错

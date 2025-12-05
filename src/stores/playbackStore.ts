@@ -52,11 +52,11 @@ export const usePlaybackStore = defineStore("playback-store", () => {
         text: detail ? detail.translatedText || detail.text || "" : "",
         rect: detail
           ? {
-            minX: detail.minX,
-            minY: detail.minY,
-            maxX: detail.maxX,
-            maxY: detail.maxY,
-          }
+              minX: detail.minX,
+              minY: detail.minY,
+              maxX: detail.maxX,
+              maxY: detail.maxY,
+            }
           : null,
         imageWidth: 0,
         imageHeight: 0,
@@ -127,4 +127,3 @@ export const usePlaybackStore = defineStore("playback-store", () => {
     buildGlobalPlaybackPlaylist,
   };
 });
-
