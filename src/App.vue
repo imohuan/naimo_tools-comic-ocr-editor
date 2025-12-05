@@ -677,6 +677,7 @@ onMounted(() => {
   // 初始化时执行重置缩放，确保居中计算正确
   nextTick(() => {
     setTimeout(() => {
+      ocrStore.loadProjectData();
       handleZoomReset();
     }, 100);
   });

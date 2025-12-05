@@ -113,21 +113,6 @@ export const useNaimoStore = defineStore("naimo", () => {
   };
 
   /**
-   * 初始化时根据本地记录加载文件夹图片
-   * 以及在可用状态或文件夹变化时自动刷新
-   */
-  const stopInitialWatch = watch(
-    [isAvailable, currentFolder],
-    ([available, folder]) => {
-      if (available && folder) {
-        loadFolderImages();
-        stopInitialWatch();
-      }
-    },
-    { immediate: true }
-  );
-
-  /**
    * 加载文件夹中的图片
    */
   const loadFolderImages = async () => {
