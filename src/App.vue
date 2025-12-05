@@ -59,11 +59,11 @@
             @zoom-reset="handleZoomReset"
             @ocr="handleOcr"
             @clear-ocr="handleClearCanvas"
-            @settings="showSettings = true"
+            @settings="toggleSettingsModal"
             @toggle-waiting-mode="handleToggleWaitingMode"
             @toggle-brush-mode="handleToggleBrushMode"
             @toggle-compare="handleToggleCompare"
-            @open-tasks="showTasks = true"
+            @open-tasks="toggleTasksModal"
           />
 
           <!-- 页码显示 - 左下角 -->
@@ -310,6 +310,14 @@ const toggleImageListCollapse = () => {
 
 const toggleTextSidebarCollapse = () => {
   isTextSidebarCollapsed.value = !isTextSidebarCollapsed.value;
+};
+
+const toggleSettingsModal = () => {
+  showSettings.value = !showSettings.value;
+};
+
+const toggleTasksModal = () => {
+  showTasks.value = !showTasks.value;
 };
 
 const shouldIgnoreShortcut = (event: KeyboardEvent) => {

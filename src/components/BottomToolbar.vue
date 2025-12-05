@@ -6,9 +6,7 @@
     <div
       class="hidden flex items-center gap-3 pr-3 border-r border-gray-200 flex-shrink-0"
     >
-      <span
-        class="font-mono font-bold text-lg text-gray-700 whitespace-nowrap px-3"
-      >
+      <span class="font-mono font-bold text-lg text-gray-700 whitespace-nowrap px-3">
         {{ currentPage }} / {{ totalPages }}
       </span>
     </div>
@@ -85,12 +83,7 @@
             stroke-linejoin="round"
           />
         </svg>
-        <svg
-          v-else
-          viewBox="0 0 24 24"
-          fill="none"
-          class="w-4 h-4 animate-spin"
-        >
+        <svg v-else viewBox="0 0 24 24" fill="none" class="w-4 h-4 animate-spin">
           <circle
             cx="12"
             cy="12"
@@ -159,9 +152,7 @@
         :disabled="!hasImage"
         :shortcut="brushModeShortcut"
         :title="
-          brushModeEnabled
-            ? '关闭画笔模式 (按 Z 切换)'
-            : '开启画笔模式 (按 Z 切换)'
+          brushModeEnabled ? '关闭画笔模式 (按 Z 切换)' : '开启画笔模式 (按 Z 切换)'
         "
         :class="
           brushModeEnabled
@@ -213,11 +204,7 @@
       </ToolbarButton>
 
       <!-- 设置按钮 -->
-      <ToolbarButton
-        :shortcut="settingsShortcut"
-        title="设置"
-        @click="handleSettings"
-      >
+      <ToolbarButton :shortcut="settingsShortcut" title="设置" @click="handleSettings">
         <svg
           viewBox="0 0 24 24"
           fill="none"
@@ -235,11 +222,7 @@
       </ToolbarButton>
 
       <!-- 任务列表按钮 -->
-      <ToolbarButton
-        :shortcut="tasksShortcut"
-        title="任务列表"
-        @click="handleOpenTasks"
-      >
+      <ToolbarButton :shortcut="tasksShortcut" title="任务列表" @click="handleOpenTasks">
         <svg
           viewBox="0 0 24 24"
           fill="none"
@@ -307,7 +290,7 @@ const waitingModeShortcut = "w";
 const brushModeShortcut = "z";
 const compareShortcut = "c";
 const settingsShortcut = "s";
-const tasksShortcut = "j";
+const tasksShortcut = "d";
 
 // 实际注册的快捷键（包括不在按钮上显示的）
 const zoomInKeyShortcut = "Ctrl+=";
