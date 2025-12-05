@@ -1,4 +1,3 @@
-import { clone } from "lodash-es";
 import type { OcrConfig } from "../types";
 
 const DEFAULT_CONFIG: OcrConfig = {
@@ -21,6 +20,7 @@ const DEFAULT_CONFIG: OcrConfig = {
   },
   mask_dilation_offset: 30,
   audio_concurrency: 2,
+  default_voice_role: "zh-CN-XiaoxiaoNeural",
 };
 
 const STORAGE_KEY = "comic-ocr-config";

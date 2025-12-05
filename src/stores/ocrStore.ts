@@ -109,6 +109,21 @@ export const useOcrStore = defineStore("ocr-store", () => {
       debounce: 500,
       immediate: true, // 自动读取数据
       serializer: serializeImages,
+      watchEffect: (data) => {
+        const newData = data.value.map(m => {
+          return {
+            url: m?.url,
+            ocrResult: m?.ocrResult?.details?.map(detail => ({
+              audio: detail?.audioPath,
+              text: detail?.text,
+              originText: detail?.originText,
+              translatedText: detail?.translatedText,
+            })),
+            processedImageUrl: m?.processedImageUrl
+          }
+        })
+        return JSON.stringify(newData)
+      },
       deserializer: async (config: any) => {
         const imageItems: ImageItem[] = naimoStore.folderImages.map(img => {
           return {

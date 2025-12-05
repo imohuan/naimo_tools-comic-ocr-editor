@@ -175,7 +175,7 @@
         任务与音频
       </div>
 
-      <div class="col-span-full space-y-2">
+      <div class="col-span-1 space-y-2">
         <div class="mb-1 text-[13px] font-medium text-gray-700">音频并发数量</div>
         <p class="text-[11px] text-gray-400 mb-1">
           并发越高占用越大，请根据机器性能合理选择
@@ -195,6 +195,27 @@
           >
             {{ value }}
           </button>
+        </div>
+      </div>
+
+      <div class="col-span-1 space-y-2">
+        <div class="mb-1 text-[13px] font-medium text-gray-700">默认配音</div>
+        <p class="text-[11px] text-gray-400 mb-1">
+          批量或单条生成音频时，如未单独选择，将使用此配音
+        </p>
+        <div class="w-full md:w-72">
+          <select
+            v-model="config.default_voice_role"
+            class="w-full rounded-md border border-gray-200 bg-white px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-400"
+          >
+            <option
+              v-for="option in voiceOptions"
+              :key="option.value || 'auto'"
+              :value="option.value"
+            >
+              {{ option.label }}
+            </option>
+          </select>
         </div>
       </div>
     </div>
@@ -220,10 +241,19 @@
 </template>
 
 <script setup lang="ts">
-import { ref, onMounted } from "vue";
+import { ref, onMounted, computed } from "vue";
 import type { OcrConfig } from "../types";
 import { useTaskStore } from "../stores/taskStore";
 import { useOcrConfigStore } from "../stores/configStore";
+
+const props = withDefaults(
+  defineProps<{
+    voiceRoleOptions?: Array<{ label: string; value: string }>;
+  }>(),
+  {
+    voiceRoleOptions: () => [],
+  }
+);
 
 const emits = defineEmits<{
   close: [];
@@ -252,6 +282,7 @@ const config = ref<OcrConfig>({
     inpainting_size: 2048,
   },
   mask_dilation_offset: 30,
+  default_voice_role: "zh-CN-XiaoxiaoNeural",
 });
 
 const detectionSizeOptions = [
@@ -328,6 +359,11 @@ const inpainterOptions = [
 ];
 
 const audioConcurrencyOptions = [1, 2, 3, 5, 8];
+
+const voiceOptions = computed(() => {
+  if (props.voiceRoleOptions?.length) return props.voiceRoleOptions;
+  return [{ label: "自动选择", value: "" }];
+});
 
 const handleSave = async () => {
   try {

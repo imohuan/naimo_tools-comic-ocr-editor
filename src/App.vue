@@ -100,7 +100,10 @@
         'max-height': '800px',
       }"
     >
-      <SettingsPanel @close="showSettings = false" />
+      <SettingsPanel
+        :voice-role-options="voiceRoleOptions"
+        @close="showSettings = false"
+      />
     </n-modal>
 
     <!-- 任务列表对话框 -->

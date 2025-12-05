@@ -1,6 +1,7 @@
 import { ref, type Ref } from 'vue';
 import { useDebounceFn, watchDebounced } from '@vueuse/core';
 import { useNaimoStore } from '../stores/naimoStore';
+import { isFunction } from 'lodash-es';
 
 /**
  * 通用的 JSON 存储 composable
@@ -15,6 +16,7 @@ export function useStoreToJSON<T = any>(
   jsonPath: Ref<string | null>,
   dataRef: Ref<T>,
   options: {
+    watchEffect?: (data: Ref<T>) => any
     debounce?: number; // 防抖延迟，默认 500ms
     immediate?: boolean; // 是否立即读取，默认 true
     onRead?: (data: T | null) => void; // 读取完成回调
@@ -154,7 +156,7 @@ export function useStoreToJSON<T = any>(
       return; // 已经在监听
     }
     watchStopHandle = watchDebounced(
-      dataRef,
+      () => isFunction(options.watchEffect) ? options.watchEffect(dataRef) : dataRef,
       () => {
         if (!jsonPath.value || !naimoStore.isAvailable) {
           return;

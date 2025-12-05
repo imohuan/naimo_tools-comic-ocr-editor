@@ -37,8 +37,7 @@ export const useOcrConfigStore = defineStore("ocr-config-store", () => {
   const saveConfigSafe = async (patch: Partial<OcrConfig>) => {
     error.value = null;
     try {
-      const current =
-        config.value ?? (await getOcrConfig());
+      const current = config.value ?? (await getOcrConfig());
       const next: OcrConfig = {
         ...current,
         ...patch,
@@ -62,5 +61,3 @@ export const useOcrConfigStore = defineStore("ocr-config-store", () => {
     saveConfig: saveConfigSafe,
   };
 });
-
-

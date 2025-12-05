@@ -1,6 +1,7 @@
 import { defineStore } from "pinia";
 import { computed, ref } from "vue";
 import { useOcrStore } from "./ocrStore";
+import { useOcrConfigStore } from "./configStore";
 import type { ImageItem, OcrTextDetail, OcrTextResult } from "../types";
 import { useEdgeTts } from "../composables/useEdgeTts";
 import { useNotify } from "../composables/useNotify";
@@ -69,6 +70,7 @@ export const useTaskStore = defineStore("task-store", () => {
   const audioConcurrency = ref(2);
   const progressStates = ref<Record<string, TaskProgressState>>({});
   const defaultProgressState: TaskProgressState = { loading: false, error: null };
+  const ocrConfigStore = useOcrConfigStore();
 
   const setTaskProgress = (key: string, patch: Partial<TaskProgressState>) => {
     const prev = progressStates.value[key] || defaultProgressState;
@@ -341,7 +343,11 @@ export const useTaskStore = defineStore("task-store", () => {
     const text = (detail.translatedText || detail.text || "").toString().trim();
     if (!text) return null;
 
-    const voice = (detail.voiceRole && detail.voiceRole.trim()) || "zh-CN-XiaoxiaoNeural";
+    const fallbackVoice =
+      (ocrConfigStore.config?.default_voice_role &&
+        ocrConfigStore.config.default_voice_role.trim()) ||
+      "zh-CN-XiaoxiaoNeural";
+    const voice = (detail.voiceRole && detail.voiceRole.trim()) || fallbackVoice;
 
     const task = addTask({
       kind: "audio",
@@ -467,8 +473,8 @@ export const useTaskStore = defineStore("task-store", () => {
             error?.name === "AbortError"
               ? "任务已取消"
               : typeof error?.message === "string"
-              ? error.message
-              : "生成音频失败";
+                ? error.message
+                : "生成音频失败";
           setTaskProgress(detailId, {
             loading: false,
             error: msg,
@@ -586,8 +592,8 @@ export const useTaskStore = defineStore("task-store", () => {
             error?.name === "AbortError"
               ? "任务已取消"
               : typeof error?.message === "string"
-              ? error.message
-              : "OCR 任务执行失败";
+                ? error.message
+                : "OCR 任务执行失败";
           setOcrProgress(image.id, { loading: false, error: msg });
           throw error;
         }
@@ -612,8 +618,8 @@ export const useTaskStore = defineStore("task-store", () => {
         error?.name === "AbortError"
           ? "任务已取消"
           : typeof error?.message === "string"
-          ? error.message
-          : "OCR 任务执行失败";
+            ? error.message
+            : "OCR 任务执行失败";
       updateTask(runner.taskId, { status, errorMessage: msg });
       throw error;
     } finally {
@@ -664,9 +670,9 @@ export const useTaskStore = defineStore("task-store", () => {
         (_prev, next) => next,
         options
           ? {
-              ...options,
-              audioMode: options.audioMode || mode,
-            }
+            ...options,
+            audioMode: options.audioMode || mode,
+          }
           : undefined
       );
     });

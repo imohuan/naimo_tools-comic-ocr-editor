@@ -81,4 +81,6 @@ export interface OcrConfig {
   mask_dilation_offset: number;
   // 音频并发数量（任务系统使用），可选字段兼容旧配置
   audio_concurrency?: number;
+  // 默认配音角色（为空时使用内置默认值）
+  default_voice_role?: string;
 }
