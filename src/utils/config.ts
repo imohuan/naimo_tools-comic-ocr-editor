@@ -1,3 +1,4 @@
+import { clone } from "lodash-es";
 import type { OcrConfig } from "../types";
 
 const DEFAULT_CONFIG: OcrConfig = {
@@ -95,7 +96,7 @@ export async function getOcrConfig(): Promise<OcrConfig> {
 export async function saveOcrConfig(config: Partial<OcrConfig>): Promise<void> {
   try {
     const current = await getOcrConfig();
-    const newConfig = { ...current, ...config };
+    const newConfig = JSON.parse(JSON.stringify({ ...current, ...config }));
 
     // 优先使用 Naimo Storage
     if (isNaimoEnv()) {
