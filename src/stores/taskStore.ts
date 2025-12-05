@@ -5,6 +5,7 @@ import type { ImageItem, OcrTextDetail, OcrTextResult } from "../types";
 import { useEdgeTts } from "../composables/useEdgeTts";
 import { useNotify } from "../composables/useNotify";
 import { useNaimoStore } from "./naimoStore";
+import { probeAudioDuration } from "../utils/audio";
 
 export type TaskKind = "ocr" | "audio";
 export type TaskStatus = "pending" | "running" | "success" | "error" | "cancelled";
@@ -451,9 +452,16 @@ export const useTaskStore = defineStore("task-store", () => {
             }
           }
 
+          // 探测音频时长，便于后续懒加载时间轴
+          let audioDuration: number | null = null;
+          if (audioUrl) {
+            audioDuration = await probeAudioDuration(audioUrl);
+          }
+
           updateDetailById(imageId, detailId, (d) => {
             d.audioUrl = audioUrl || null;
             d.audioPath = audioFilePath || undefined;
+            d.audioDuration = audioDuration;
           });
           clearTaskProgress(detailId);
         } catch (error: any) {

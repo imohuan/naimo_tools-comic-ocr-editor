@@ -139,99 +139,124 @@
       />
     </div>
 
-    <!-- 图片列表 -->
+    <!-- 图片列表（虚拟列表 + n-image 懒加载） -->
     <div
-      class="flex-1 overflow-y-auto flex flex-col scrollbar-thin scrollbar-thumb-gray-400 scrollbar-track-gray-100"
-      :class="isCollapsed ? 'p-2 gap-2' : 'p-4 gap-3'"
+      ref="listScrollContainer"
+      :id="virtualListRootId"
+      class="virtualList flex-1 overflow-hidden flex flex-col gap-2 scrollbar-thin scrollbar-thumb-gray-400 scrollbar-track-gray-100"
     >
-      <div
-        v-for="(image, index) in images"
-        :key="index"
-        class="image-item relative border-2 rounded-lg overflow-hidden cursor-pointer transition-all duration-200 group shrink-0"
-        :class="[
-          isCollapsed ? 'hover:scale-105' : 'hover:scale-[1.02] hover:shadow-md',
-          index === currentIndex ? 'border-blue-600' : 'border-gray-200',
-        ]"
-        @click="selectImage(index)"
+      <n-virtual-list
+        class="flex-1"
+        :items="images"
+        :item-size="listItemSize"
+        :key-field="'id'"
+        :style="{ height: '100%' }"
       >
-        <div
-          class="w-full bg-contain bg-center bg-no-repeat bg-gray-100 pointer-events-none"
-          :class="isCollapsed ? 'aspect-square' : 'aspect-video'"
-          :style="{
-            backgroundImage: image.url ? `url(${image.url})` : 'none',
-          }"
-        ></div>
-        <button
-          class="remove-btn absolute bg-black/60 border-none rounded-full cursor-pointer flex items-center justify-center opacity-0 transition-opacity duration-200 group-hover:opacity-100 hover:bg-red-600/90"
-          :class="isCollapsed ? 'top-0.5 right-0.5 w-4 h-4' : 'top-1 right-1 w-6 h-6'"
-          @click.stop="removeImage(index)"
-          title="删除"
-        >
-          <svg
-            viewBox="0 0 24 24"
-            fill="none"
-            stroke="currentColor"
-            stroke-width="2"
-            :class="isCollapsed ? 'w-2.5 h-2.5' : 'w-3.5 h-3.5'"
-            class="text-white"
+        <template #default="{ item, index }">
+          <div
+            :style="{ marginBottom: itemGap + 'px' }"
+            :class="['py-0', isCollapsed ? 'p-2' : 'p-4']"
           >
-            <line x1="18" y1="6" x2="6" y2="18"></line>
-            <line x1="6" y1="6" x2="18" y2="18"></line>
-          </svg>
-        </button>
-        <!-- OCR状态指示 / 加载中指示 -->
-        <div
-          v-if="image.ocrLoading"
-          class="absolute bottom-1 left-1 bg-white/90 text-blue-600 text-xs px-1.5 py-0.5 rounded flex items-center justify-center"
-        >
-          <svg
-            class="w-3 h-3 animate-spin"
-            viewBox="0 0 24 24"
-            fill="none"
-            stroke="currentColor"
-            stroke-width="2"
-          >
-            <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" />
-            <path class="opacity-75" d="M4 12a8 8 0 018-8" stroke="currentColor" />
-          </svg>
-        </div>
-        <div
-          v-else-if="isImagePendingOcr(image)"
-          class="absolute bottom-1 left-1 bg-orange-500 text-white text-xs px-1.5 py-0.5 rounded flex items-center justify-center"
-        >
-          <svg
-            class="w-3 h-3"
-            viewBox="0 0 24 24"
-            fill="none"
-            stroke="currentColor"
-            stroke-width="2"
-          >
-            <circle cx="12" cy="12" r="10"></circle>
-            <polyline points="12 6 12 12 16 14"></polyline>
-          </svg>
-        </div>
-        <div
-          v-else-if="hasImageOcrTask(image)"
-          class="absolute bottom-1 left-1 bg-purple-500 text-white text-xs px-1.5 py-0.5 rounded flex items-center justify-center"
-        >
-          <svg
-            class="w-3 h-3"
-            viewBox="0 0 24 24"
-            fill="none"
-            stroke="currentColor"
-            stroke-width="2"
-          >
-            <rect x="6" y="4" width="4" height="16"></rect>
-            <rect x="14" y="4" width="4" height="16"></rect>
-          </svg>
-        </div>
-        <div
-          v-else-if="image.ocrResult"
-          class="absolute bottom-1 left-1 bg-green-500 text-white text-xs px-1.5 py-0.5 rounded"
-        >
-          OCR
-        </div>
-      </div>
+            <div
+              class="image-item relative border-2 rounded-lg overflow-hidden cursor-pointer transition-all duration-200 group shrink-0"
+              :class="[
+                isCollapsed ? 'hover:scale-105' : 'hover:scale-[1.02] hover:shadow-md',
+                index === currentIndex ? 'border-blue-600' : 'border-gray-200',
+              ]"
+              @click="selectImage(index)"
+              :ref="(el) => registerImageEl(el, index)"
+              :style="{ height: imageCardHeight + 'px' }"
+            >
+              <div
+                class="w-full h-full bg-contain bg-center bg-no-repeat bg-gray-100"
+                :style="{
+                  backgroundImage: getDisplayUrl(item)
+                    ? `url(${getDisplayUrl(item)})`
+                    : 'none',
+                }"
+              ></div>
+              <button
+                class="remove-btn absolute bg-black/60 border-none rounded-full cursor-pointer flex items-center justify-center opacity-0 transition-opacity duration-200 group-hover:opacity-100 hover:bg-red-600/90"
+                :class="
+                  isCollapsed ? 'top-0.5 right-0.5 w-4 h-4' : 'top-1 right-1 w-6 h-6'
+                "
+                @click.stop="removeImage(index)"
+                title="删除"
+              >
+                <svg
+                  viewBox="0 0 24 24"
+                  fill="none"
+                  stroke="currentColor"
+                  stroke-width="2"
+                  :class="isCollapsed ? 'w-2.5 h-2.5' : 'w-3.5 h-3.5'"
+                  class="text-white"
+                >
+                  <line x1="18" y1="6" x2="6" y2="18"></line>
+                  <line x1="6" y1="6" x2="18" y2="18"></line>
+                </svg>
+              </button>
+              <!-- OCR状态指示 / 加载中指示 -->
+              <div
+                v-if="item.ocrLoading"
+                class="absolute bottom-1 left-1 bg-white/90 text-blue-600 text-xs px-1.5 py-0.5 rounded flex items-center justify-center"
+              >
+                <svg
+                  class="w-3 h-3 animate-spin"
+                  viewBox="0 0 24 24"
+                  fill="none"
+                  stroke="currentColor"
+                  stroke-width="2"
+                >
+                  <circle
+                    class="opacity-25"
+                    cx="12"
+                    cy="12"
+                    r="10"
+                    stroke="currentColor"
+                  />
+                  <path class="opacity-75" d="M4 12a8 8 0 018-8" stroke="currentColor" />
+                </svg>
+              </div>
+              <div
+                v-else-if="isImagePendingOcr(item)"
+                class="absolute bottom-1 left-1 bg-orange-500 text-white text-xs px-1.5 py-0.5 rounded flex items-center justify-center"
+              >
+                <svg
+                  class="w-3 h-3"
+                  viewBox="0 0 24 24"
+                  fill="none"
+                  stroke="currentColor"
+                  stroke-width="2"
+                >
+                  <circle cx="12" cy="12" r="10"></circle>
+                  <polyline points="12 6 12 12 16 14"></polyline>
+                </svg>
+              </div>
+              <div
+                v-else-if="hasImageOcrTask(item)"
+                class="absolute bottom-1 left-1 bg-purple-500 text-white text-xs px-1.5 py-0.5 rounded flex items-center justify-center"
+              >
+                <svg
+                  class="w-3 h-3"
+                  viewBox="0 0 24 24"
+                  fill="none"
+                  stroke="currentColor"
+                  stroke-width="2"
+                >
+                  <rect x="6" y="4" width="4" height="16"></rect>
+                  <rect x="14" y="4" width="4" height="16"></rect>
+                </svg>
+              </div>
+              <div
+                v-else-if="item.ocrResult"
+                class="absolute bottom-1 left-1 bg-green-500 text-white text-xs px-1.5 py-0.5 rounded"
+              >
+                OCR
+              </div>
+            </div>
+          </div>
+        </template>
+      </n-virtual-list>
     </div>
 
     <!-- 底部批量 OCR / 全局播放 工具栏 -->
@@ -412,21 +437,22 @@
 
 <script setup lang="ts">
 import { ref, computed, toRefs, watch } from "vue";
-import { NPopover, NCheckbox } from "naive-ui";
+import type { ComponentPublicInstance } from "vue";
+import { NPopover, NCheckbox, NVirtualList } from "naive-ui";
 import { useOcrStore } from "../stores/ocrStore";
 import { useTaskStore } from "../stores/taskStore";
-import type { ImageItem, OcrTextDetail } from "../types";
-import { getImageDimensions, getImageDimensionsFromUrl } from "../utils/image";
+import type { ImageItem } from "../types";
 import { canvasEventBus, uiEventBus } from "../core/event-bus";
-import type { SequencePlaybackItem } from "./AudioSequencePlayer.vue";
 import { useNotify } from "../composables/useNotify";
-import { generateSilentAudio } from "../utils/audio";
 import { useNaimoStore } from "../stores/naimoStore";
+import { usePlaybackStore } from "../stores/playbackStore";
+import { useIntersectionObserver } from "../composables/useIntersectionObserver";
 
 const store = useOcrStore();
 const taskStore = useTaskStore();
 const { success: successNotify, error: errorNotify } = useNotify();
 const naimoStore = useNaimoStore();
+const playbackStore = usePlaybackStore();
 
 const props = defineProps<{
   isCollapsed: boolean;
@@ -439,6 +465,14 @@ const { isCollapsed } = toRefs(props);
 const uploadArea = ref<HTMLDivElement>();
 const fileInput = ref<HTMLInputElement>();
 const isDragOver = ref(false);
+const displayUrlMap = ref<Map<string, string | null>>(new Map());
+const listScrollContainer = ref<HTMLElement | null>(null);
+const virtualListRootId = "image-list-scroll";
+
+const imageHeight = computed(() => (isCollapsed.value ? 90 : 170));
+const imageCardHeight = computed(() => imageHeight.value);
+const itemGap = computed(() => (isCollapsed.value ? 8 : 12));
+const listItemSize = computed(() => imageCardHeight.value + itemGap.value);
 
 // 监听项目错误并使用 errorNotify 显示
 watch(
@@ -499,6 +533,56 @@ const selectImage = (index: number) => {
   canvasEventBus.emit("canvas:zoom-reset");
 };
 
+const images = computed(() => store.images);
+const currentIndex = computed(() => store.currentIndex);
+
+// 获取展示用的图片 URL（懒加载缓存）
+const getDisplayUrl = (image: ImageItem) => {
+  const cached = displayUrlMap.value.get(image.id);
+  return cached || image.processedImageUrl || image.url || "";
+};
+
+// 当图片进入视口时按需加载真实 URL
+const handleImageVisible = async (image: ImageItem) => {
+  await store.ensureImageUrl(image);
+  displayUrlMap.value.set(image.id, image.processedImageUrl || image.url || "");
+};
+
+const {
+  registerElement: registerObservedElement,
+  resetObserver,
+} = useIntersectionObserver({
+  rootRef: listScrollContainer,
+  rootMargin: "100px",
+  threshold: 0.01,
+  onIntersect: (entry) => {
+    const index = Number((entry.target as HTMLElement).dataset.index);
+    const image = images.value[index];
+    if (image) {
+      handleImageVisible(image);
+    }
+  },
+});
+
+const registerImageEl = (el: Element | ComponentPublicInstance | null, index: number) => {
+  if (!el) return;
+  const element =
+    (el as ComponentPublicInstance).$el !== undefined
+      ? ((el as ComponentPublicInstance).$el as HTMLElement)
+      : (el as HTMLElement);
+  element.dataset.index = String(index);
+  registerObservedElement(element);
+};
+
+watch(
+  images,
+  () => {
+    // 数据变化后清空旧的监听，等待新 DOM 注册
+    resetObserver();
+  },
+  { deep: true }
+);
+
 // 获取文件夹名称
 const getFolderName = (folderPath: string | null): string => {
   if (!folderPath) return "";
@@ -519,9 +603,6 @@ const handleCloseProject = () => {
 const removeImage = (index: number) => {
   store.removeImage(index);
 };
-
-const images = computed(() => store.images);
-const currentIndex = computed(() => store.currentIndex);
 
 // 检查图片是否在OCR等待队列中
 const isImagePendingOcr = (image: ImageItem) => {
@@ -573,18 +654,6 @@ const canPlaySequence = computed(() => {
   return images.value.length > 0 && !playerLoading.value;
 });
 
-// 解析图片尺寸
-const resolveImageSize = async (image: ImageItem) => {
-  if (image.file) {
-    return getImageDimensions(image.file);
-  }
-  const src = image.processedImageUrl || image.url;
-  if (!src) {
-    throw new Error("无法获取当前图片资源");
-  }
-  return getImageDimensionsFromUrl(src);
-};
-
 // 计算将要添加的任务数量
 const calculateTaskCount = () => {
   const list = (images.value || []) as ImageItem[];
@@ -614,60 +683,6 @@ const calculateTaskCount = () => {
   return { ocrTaskCount, audioTaskCount, total: ocrTaskCount + audioTaskCount };
 };
 
-// 构建「所有图片」的播放列表
-const buildGlobalPlaybackPlaylist = async (): Promise<SequencePlaybackItem[]> => {
-  const list = (images.value || []) as ImageItem[];
-  if (!list.length) {
-    throw new Error("当前没有可用图片");
-  }
-
-  // 生成 3 秒空白音频
-  const { blob } = await generateSilentAudio(3);
-  const silentAudioUrl = URL.createObjectURL(blob);
-
-  const result: SequencePlaybackItem[] = [];
-
-  for (const image of list) {
-    const src = image.processedImageUrl || image.url;
-    if (!src) {
-      continue;
-    }
-
-    const { width, height } = await resolveImageSize(image);
-
-    // 如果没有 OCR 结果或详情为空，创建一个 3 秒的空白播放项
-    if (!image.ocrResult || !image.ocrResult.details?.length) {
-      result.push({
-        image: src,
-        audio: silentAudioUrl,
-        text: "",
-        rect: null, // 设置为 null 表示没有需要高亮的区域
-        imageWidth: width,
-        imageHeight: height,
-      });
-    } else {
-      // 正常处理有 OCR 结果的图片
-      for (const detail of image.ocrResult.details as OcrTextDetail[]) {
-        result.push({
-          image: src,
-          audio: detail.audioUrl || "",
-          text: detail.translatedText || detail.text || "",
-          rect: {
-            minX: detail.minX,
-            minY: detail.minY,
-            maxX: detail.maxX,
-            maxY: detail.maxY,
-          },
-          imageWidth: width,
-          imageHeight: height,
-        });
-      }
-    }
-  }
-
-  return result;
-};
-
 // 打开序列播放（所有图片）
 const handleOpenPlayback = async () => {
   if (!canPlaySequence.value || playerLoading.value) return;
@@ -675,7 +690,7 @@ const handleOpenPlayback = async () => {
   playerError.value = null;
 
   try {
-    const playlist = await buildGlobalPlaybackPlaylist();
+    const playlist = await playbackStore.buildGlobalPlaybackPlaylist();
     if (!playlist.length) {
       throw new Error("暂无可播放的内容");
     }
@@ -737,7 +752,10 @@ const handleBatchExecute = () => {
 };
 </script>
 
-<style scoped>
+<style>
+.virtualList .v-vl-items {
+  padding-top: 12px !important;
+}
 .scrollbar-thin::-webkit-scrollbar {
   width: 6px;
 }

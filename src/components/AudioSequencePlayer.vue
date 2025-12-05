@@ -313,6 +313,7 @@ export interface SequencePlaybackItem {
   rect: SequencePlaybackRect | null;
   imageWidth: number;
   imageHeight: number;
+  duration?: number | null;
 }
 
 const props = defineProps<{
@@ -607,6 +608,14 @@ const prepareTimeline = async () => {
   isPreparing.value = true;
   preparationError.value = null;
   try {
+    // 如果播放项已经包含时长，先行填充时间轴，减少等待
+    const presetDurations = props.playlist
+      .map((item) => item.duration)
+      .filter((d): d is number => Number.isFinite(d));
+    if (presetDurations.length === props.playlist.length) {
+      durations.value = presetDurations;
+    }
+
     // 额外步骤：将整列音频合并为一个音频文件，供播放器统一播放
     const files: File[] = [];
     for (let i = 0; i < props.playlist.length; i++) {
@@ -817,7 +826,7 @@ const handleTimelineUpdate = async (value: number | [number, number]) => {
   handleTimelineChange();
 };
 
-const handleAudioTimeUpdate = (e: Event) => {
+const handleAudioTimeUpdate = (_e: Event) => {
   if (!canPlay.value) return;
   if (isDraggingTimeline.value) return;
   const audio = audioRef.value;

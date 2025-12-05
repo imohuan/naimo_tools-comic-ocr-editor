@@ -198,6 +198,7 @@ const sequencePlayerPlaylist = ref<SequencePlaybackItem[]>([]);
 const sequencePlayerTitle = ref("文本音频序列播放");
 const ocrStore = useOcrStore();
 const taskStore = useTaskStore();
+
 const ocrLoading = computed(() => ocrStore.ocrLoading);
 const zoomLevel = ref(1);
 const isWaitingMode = ref(false);

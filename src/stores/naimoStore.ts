@@ -6,7 +6,7 @@ import type { OcrTextResult, OcrTextDetail } from '../types';
 export interface ImageFileInfo {
   path: string;
   name: string;
-  url: string;
+  url?: string | null;
 }
 
 export interface ProjectConfig {
@@ -373,6 +373,22 @@ export const useNaimoStore = defineStore('naimo', () => {
   };
 
   /**
+   * 按需获取原始图片 URL
+   */
+  const getImageUrl = async (imagePath: string): Promise<string | null> => {
+    if (!isAvailable.value) {
+      return null;
+    }
+    try {
+      const api = window.myPluginAPI;
+      return await api.getImageUrl(imagePath);
+    } catch (err: any) {
+      error.value = err.message || '获取图片失败';
+      return null;
+    }
+  };
+
+  /**
    * 关闭项目
    */
   const closeProject = () => {
@@ -408,6 +424,7 @@ export const useNaimoStore = defineStore('naimo', () => {
     getAudioFilePath,
     saveProcessedImage,
     getProcessedImageUrl,
+    getImageUrl,
     closeProject,
   };
 });

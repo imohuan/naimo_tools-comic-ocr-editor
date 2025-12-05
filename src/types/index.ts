@@ -13,6 +13,8 @@ export interface OcrTextDetail {
   audioUrl?: string | null;
   // 音频文件路径（项目模式下的本地文件路径）
   audioPath?: string;
+  // 生成后的音频时长（秒），用于懒加载时提前获知时间轴
+  audioDuration?: number | null;
   minX: number;
   minY: number;
   maxX: number;
@@ -47,7 +49,7 @@ export interface ImageItem {
   // 每张图片的唯一标识，用于异步 OCR 结果与图片一一对应
   id: string;
   file?: File; // Electron 项目模式下可能为 undefined
-  url: string;
+  url?: string | null;
   // Electron 项目模式专用字段
   path?: string; // 图片文件路径（仅在 Electron 项目模式下存在）
   name?: string; // 图片文件名（仅在 Electron 项目模式下存在）
@@ -55,6 +57,8 @@ export interface ImageItem {
   ocrLoading: boolean;
   // 处理好的图片 URL（如 final.png），如果存在则优先使用此图片替换原图
   processedImageUrl?: string | null;
+  // 处理图片的本地路径（项目模式）
+  processedImagePath?: string | null;
 }
 
 export interface OcrConfig {

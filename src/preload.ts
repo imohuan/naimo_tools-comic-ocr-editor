@@ -30,7 +30,7 @@ interface ProjectConfig {
 interface ImageFileInfo {
   path: string;
   name: string;
-  url: string; // blob url
+  url?: string | null; // blob url（懒加载时为 null）
 }
 
 /**
@@ -117,16 +117,11 @@ async function getImagesInFolder(folderPath: string): Promise<ImageFileInfo[]> {
           const fullPath = path.join(folderPath, file);
           const stats = await fsp.stat(fullPath);
           if (stats.isFile()) {
-            const naimo = (window as any).naimo as any;
-            // getLocalImage 返回纯 base64（无前缀），需要添加 data URL 前缀
-            const base64 = await naimo.system.getLocalImage(fullPath);
-            const ext = path.extname(file);
-            const mimeType = getMimeTypeFromExt(ext);
-            const url = `data:${mimeType};base64,${base64}`;
+            // 仅返回基础信息，真实图片在渲染进程按需加载
             return {
               path: fullPath,
               name: file,
-              url,
+              url: null,
             } as ImageFileInfo;
           }
           return null;
@@ -568,6 +563,24 @@ async function getProcessedImageUrl(folderPath: string, processedImagePath: stri
   }
 }
 
+/**
+ * 按需读取原始图片并返回 data URL
+ */
+async function getImageUrl(imagePath: string): Promise<string | null> {
+  if (!isElectron() || !imagePath) return null;
+
+  try {
+    const naimo = (window as any).naimo as any;
+    const base64 = await naimo.system.getLocalImage(imagePath);
+    const ext = path.extname(imagePath);
+    const mimeType = getMimeTypeFromExt(ext);
+    return `data:${mimeType};base64,${base64}`;
+  } catch (error) {
+    console.error("[getImageUrl] 获取图片失败:", error);
+    return null;
+  }
+}
+
 // ==================== 暴露插件 API ====================
 
 const myPluginAPI = {
@@ -598,6 +611,7 @@ const myPluginAPI = {
   getAudioFilePath,
   saveProcessedImage,
   getProcessedImageUrl,
+  getImageUrl,
 };
 
 // 通过 contextBridge 暴露 API 到渲染进程

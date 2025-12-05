@@ -235,14 +235,13 @@
 import { computed, ref, watch, nextTick, toRefs, onBeforeUnmount } from "vue";
 import { VueDraggable } from "vue-draggable-plus";
 import { storeToRefs } from "pinia";
-import type { ImageItem, OcrTextDetail } from "../types";
+import type { OcrTextDetail } from "../types";
 import { useOcrStore } from "../stores/ocrStore";
 import { useTaskStore } from "../stores/taskStore";
+import { usePlaybackStore } from "../stores/playbackStore";
 import TextResultItem from "./TextResultItem.vue";
 import { NPopover } from "naive-ui";
-import { getImageDimensions, getImageDimensionsFromUrl } from "../utils/image";
 import { uiEventBus } from "../core/event-bus";
-import type { SequencePlaybackItem } from "./AudioSequencePlayer.vue";
 import { useNotify } from "../composables/useNotify";
 
 interface Props {
@@ -260,6 +259,7 @@ const { isCollapsed, width } = toRefs(props);
 
 const ocrStore = useOcrStore();
 const taskStore = useTaskStore();
+const playbackStore = usePlaybackStore();
 const { error: errorNotify, success: successNotify } = useNotify();
 const { canUndoDetails, canRedoDetails } = storeToRefs(ocrStore);
 const currentImage = computed(() => ocrStore.currentImage);
@@ -473,48 +473,12 @@ const handleStartBatchAudio = () => {
   taskStore.startBatchAudioForCurrentImage(batchMode.value);
 };
 
-const resolveImageSize = async (image: ImageItem) => {
-  if (image.file) {
-    return getImageDimensions(image.file);
-  }
-  const src = image.processedImageUrl || image.url;
-  if (!src) {
-    throw new Error("无法获取当前图片资源");
-  }
-  return getImageDimensionsFromUrl(src);
-};
-
-const buildPlaybackPlaylist = async (): Promise<SequencePlaybackItem[]> => {
-  const image = currentImage.value;
-  if (!image) {
-    throw new Error("当前没有可用图片");
-  }
-  const src = image.processedImageUrl || image.url;
-  if (!src) {
-    throw new Error("未找到图片地址");
-  }
-  const { width, height } = await resolveImageSize(image);
-  return (detailsSource.value || []).map((detail: OcrTextDetail) => ({
-    image: src,
-    audio: detail.audioUrl || "",
-    text: detail.translatedText || detail.text || "",
-    rect: {
-      minX: detail.minX,
-      minY: detail.minY,
-      maxX: detail.maxX,
-      maxY: detail.maxY,
-    },
-    imageWidth: width,
-    imageHeight: height,
-  }));
-};
-
 const handleOpenPlayback = async () => {
   if (!canPlaySequence.value || playerLoading.value) return;
   playerLoading.value = true;
   playerError.value = null;
   try {
-    const playlist = await buildPlaybackPlaylist();
+    const playlist = await playbackStore.buildCurrentImagePlaylist();
     if (!playlist.length) {
       throw new Error("暂无可播放的内容");
     }

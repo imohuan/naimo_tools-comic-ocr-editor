@@ -1042,6 +1042,15 @@ export interface MyPluginAPI {
 	 * @returns 图片的 data URL，如果获取失败则返回 null
 	 */
 	getProcessedImageUrl(folderPath: string, processedImagePath: string): Promise<string | null>;
+
+
+	/**
+	 * 获取原始图片文件的 URL（用于本地预览或处理）
+	 * @param imagePath 图片文件路径（绝对或相对路径）
+	 * @returns 图片的 data URL 或 blob URL，如果获取失败则返回 null
+	 */
+	getImageUrl(imagePath: string): Promise<string | null>;
+
 }
 
 declare global {

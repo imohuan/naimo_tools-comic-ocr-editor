@@ -114,6 +114,41 @@ export const generateSilentAudio = async (
   }
 };
 
+/**
+ * 探测音频时长（秒）
+ * 兼容 URL / Blob / ArrayBuffer，内部使用 Web Audio 解码元数据。
+ */
+export const probeAudioDuration = async (
+  source: string | Blob | ArrayBuffer
+): Promise<number | null> => {
+  try {
+    const AudioCtx: typeof AudioContext =
+      (window as any).AudioContext || (window as any).webkitAudioContext;
+    if (!AudioCtx) {
+      return null;
+    }
+
+    const ctx = new AudioCtx();
+    try {
+      const arrayBuffer =
+        typeof source === "string"
+          ? await (await fetch(source)).arrayBuffer()
+          : source instanceof Blob
+            ? await source.arrayBuffer()
+            : source;
+      const buffer = await ctx.decodeAudioData(arrayBuffer.slice(0));
+      return buffer.duration;
+    } finally {
+      ctx.close().catch(() => {
+        // ignore
+      });
+    }
+  } catch (error) {
+    console.warn("probeAudioDuration failed:", error);
+    return null;
+  }
+};
+
 export const mergeAudioFiles = async (
   files: File[],
   options: MergeAudioOptions = {}

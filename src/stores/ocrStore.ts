@@ -69,34 +69,26 @@ export const useOcrStore = defineStore("ocr-store", () => {
   // 将 ProjectConfig 反序列化为 ImageItem[]
   const deserializeImages = async (config: ProjectConfig | null, folderImages: ImageItem[]): Promise<ImageItem[]> => {
     if (!config || !config.images) return folderImages;
-    // 从 folderImages 恢复 ImageItem，并合并 OCR 
-
-    const getAudioUrl = async (path: string) => {
-      return await naimoStore.getAudioUrl(path);
-    }
+    // 从 folderImages 恢复 ImageItem，并合并 OCR （资源懒加载）
 
     const result = await Promise.all(folderImages.map(async (img) => {
       if (!img.path) return img;
       const configKey = toRelativePath(img.path);
       const configItem = config.images[configKey];
       if (configItem) {
-        // 从配置中恢复 processedImageUrl（如果有 processedImagePath）
-        let processedImageUrl: string | null = null;
         if (configItem.processedImagePath) {
-          // 将路径保存到映射中
           processedImagePathMap.value.set(img.path, configItem.processedImagePath);
-          processedImageUrl = await naimoStore.getProcessedImageUrl(configItem.processedImagePath) || null;
         }
-
         return {
           ...img,
-          processedImageUrl,
+          url: img.url || null,
+          processedImageUrl: null,
+          processedImagePath: configItem.processedImagePath || null,
           // 从配置中恢复 ocrResult（可能是 null，表示已处理但无结果）
           ocrResult: configItem.ocrResult.length > 0 ? {
-            details: await Promise.all(configItem.ocrResult.map(async (detail) => {
-              if (!detail.audioPath) return detail;
-              const audioUrl = await getAudioUrl(detail.audioPath);
-              return { ...detail, audioUrl }
+            details: configItem.ocrResult.map((detail) => ({
+              ...detail,
+              audioUrl: null, // 懒加载
             })),
             img: null,
             detection_size: 0,
@@ -237,17 +229,86 @@ export const useOcrStore = defineStore("ocr-store", () => {
   // 移除图片
   const removeImage = (index: number) => {
     if (index < 0 || index >= images.value.length) return;
-    URL.revokeObjectURL(images.value[index].url);
+    const targetUrl = images.value[index].url;
+    if (targetUrl && targetUrl.startsWith('blob:')) {
+      URL.revokeObjectURL(targetUrl);
+    }
     images.value.splice(index, 1);
     if (currentIndex.value >= images.value.length) {
       currentIndex.value = Math.max(0, images.value.length - 1);
     }
   };
 
-  // 选中图片
+  // 资源懒加载：避免初始时加载大量图片/音频
+  const resourceLoading = ref<Map<string, boolean>>(new Map());
+
+  const ensureImageUrl = async (image: ImageItem) => {
+    if (image.url || !image.path || !naimoStore.isProjectMode) return;
+    const key = image.path;
+    if (resourceLoading.value.get(`img:${key}`)) return;
+    resourceLoading.value.set(`img:${key}`, true);
+    try {
+      const url = await naimoStore.getImageUrl(image.path);
+      if (url) {
+        image.url = url;
+      }
+    } finally {
+      resourceLoading.value.delete(`img:${key}`);
+    }
+  };
+
+  const ensureProcessedImageUrl = async (image: ImageItem) => {
+    const pathKey = image.path;
+    if (!pathKey) return;
+    const processedPath =
+      image.processedImagePath ||
+      (processedImagePathMap.value.has(pathKey)
+        ? processedImagePathMap.value.get(pathKey)
+        : null);
+    if (!processedPath || image.processedImageUrl) return;
+    if (resourceLoading.value.get(`processed:${processedPath}`)) return;
+    resourceLoading.value.set(`processed:${processedPath}`, true);
+    try {
+      const url = await naimoStore.getProcessedImageUrl(processedPath);
+      if (url) {
+        image.processedImageUrl = url;
+      }
+    } finally {
+      resourceLoading.value.delete(`processed:${processedPath}`);
+    }
+  };
+
+  const ensureAudioUrls = async (image: ImageItem) => {
+    if (!image.ocrResult || !image.ocrResult.details?.length) return;
+    const tasks = image.ocrResult.details.map(async (detail) => {
+      if (detail.audioUrl || !detail.audioPath) return;
+      const cacheKey = `audio:${detail.audioPath}`;
+      if (resourceLoading.value.get(cacheKey)) return;
+      resourceLoading.value.set(cacheKey, true);
+      try {
+        const url = await naimoStore.getAudioUrl(detail.audioPath);
+        if (url) {
+          detail.audioUrl = url;
+        }
+      } finally {
+        resourceLoading.value.delete(cacheKey);
+      }
+    });
+    await Promise.all(tasks);
+  };
+
+  const loadResourcesForImage = async (image: ImageItem | null | undefined) => {
+    if (!image) return;
+    await ensureImageUrl(image);
+    await ensureProcessedImageUrl(image);
+    await ensureAudioUrls(image);
+  };
+
+  // 选中图片时按需加载资源
   const selectImage = (index: number) => {
     if (index < 0 || index >= images.value.length) return;
     currentIndex.value = index;
+    void loadResourcesForImage(images.value[index]);
   };
 
   // 设置当前图片 OCR 结果
@@ -328,6 +389,10 @@ export const useOcrStore = defineStore("ocr-store", () => {
     const imageRef = findImageById(imageId);
     if (!imageRef) return;
 
+    if (!file) {
+      await ensureImageUrl(imageRef);
+    }
+
     ocrLoading.value = true;
     imageRef.ocrLoading = true;
 
@@ -344,7 +409,7 @@ export const useOcrStore = defineStore("ocr-store", () => {
 
           if (options?.patchArea) {
             // 如果提供了 patchArea，则进行局部替换
-            const baseImage = target.processedImageUrl || target.url;
+            const baseImage = target.processedImageUrl || target.url || imageUrl;
             try {
               finalImageUrl = await compositeImages(
                 baseImage,
@@ -369,6 +434,7 @@ export const useOcrStore = defineStore("ocr-store", () => {
               if (savedPath) {
                 // 将路径保存到映射中，以便序列化时使用
                 processedImagePathMap.value.set(target.path, savedPath);
+                target.processedImagePath = savedPath;
                 console.log('[runOcrTask] 处理图片已保存到本地:', savedPath);
               }
             } catch (error) {
@@ -396,7 +462,7 @@ export const useOcrStore = defineStore("ocr-store", () => {
           console.error("读取图片尺寸失败:", error);
           return null;
         })
-        : getImageDimensionsFromUrl(imageRef.url).catch((error) => {
+        : getImageDimensionsFromUrl(imageRef.url || "").catch((error) => {
           console.error("读取图片尺寸失败:", error);
           return null;
         });
@@ -543,5 +609,9 @@ export const useOcrStore = defineStore("ocr-store", () => {
     // 自动保存相关
     jsonStorage,
     loadProjectData,
+    ensureImageUrl,
+    ensureProcessedImageUrl,
+    ensureAudioUrls,
+    loadResourcesForImage,
   };
 });
