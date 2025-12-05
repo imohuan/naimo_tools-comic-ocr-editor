@@ -40,6 +40,28 @@ function isElectron(): boolean {
   return typeof window !== "undefined" && (window as any).naimo !== undefined;
 }
 
+/**
+ * 将路径标准化为相对项目目录的形式
+ */
+function toRelativePath(folderPath: string, targetPath: string | undefined | null): string {
+  if (!targetPath) return "";
+  // 已经是相对路径则直接返回（去掉开头的分隔符以防误判为绝对）
+  if (!path.isAbsolute(targetPath)) {
+    return targetPath.replace(/^[\\/]+/, "");
+  }
+  // 计算相对路径，空字符串时返回文件名本身
+  const relative = path.relative(folderPath, targetPath);
+  return relative || path.basename(targetPath);
+}
+
+/**
+ * 将相对路径转换为基于项目目录的绝对路径
+ */
+function toAbsolutePath(folderPath: string, targetPath: string | undefined | null): string {
+  if (!targetPath) return "";
+  return path.isAbsolute(targetPath) ? targetPath : path.join(folderPath, targetPath);
+}
+
 // ==================== 文件系统操作 ====================
 
 /**
@@ -183,7 +205,8 @@ async function saveOcrResult(
   imagePath: string,
   ocrResult: any
 ): Promise<boolean> {
-  console.log("[saveOcrResult] 开始保存 OCR 结果", { folderPath, imagePath, detailsCount: ocrResult?.details?.length || 0 });
+  const relativeImagePath = toRelativePath(folderPath, imagePath);
+  console.log("[saveOcrResult] 开始保存 OCR 结果", { folderPath, imagePath: relativeImagePath, detailsCount: ocrResult?.details?.length || 0 });
 
   if (!isElectron()) {
     console.warn("[saveOcrResult] 非 Electron 环境，跳过");
@@ -198,13 +221,13 @@ async function saveOcrResult(
     console.log("[saveOcrResult] 读取到现有配置，图片数量:", Object.keys(config.images || {}).length);
   }
 
-  config.images[imagePath] = {
-    ...config.images[imagePath],
+  config.images[relativeImagePath] = {
+    ...config.images[relativeImagePath],
     ocrResult,
   };
   config.updatedAt = new Date().toISOString();
 
-  console.log("[saveOcrResult] 准备写入配置，图片路径:", imagePath);
+  console.log("[saveOcrResult] 准备写入配置，图片路径:", relativeImagePath);
   const result = await writeConfig(folderPath, config);
   console.log("[saveOcrResult]", result ? "✅ 保存成功" : "❌ 保存失败");
   return result;
@@ -217,7 +240,8 @@ async function getOcrResult(folderPath: string, imagePath: string): Promise<any 
   if (!isElectron()) return null;
 
   const config = await readConfig(folderPath);
-  return config?.images[imagePath]?.ocrResult || null;
+  const relativeImagePath = toRelativePath(folderPath, imagePath);
+  return config?.images[relativeImagePath]?.ocrResult || null;
 }
 
 // ==================== 音频文件管理 ====================
@@ -274,7 +298,7 @@ async function saveAudioFile(
   try {
     await fsp.writeFile(audioFilePath, audioBuffer);
     console.log("[saveAudioFile] ✅ 音频文件保存成功:", audioFilePath, "大小:", audioBuffer.length, "bytes");
-    return audioFilePath;
+    return toRelativePath(folderPath, audioFilePath);
   } catch (error) {
     console.error("[saveAudioFile] ❌ 保存音频文件失败:", error);
     return null;
@@ -284,12 +308,13 @@ async function saveAudioFile(
 /**
  * 获取音频文件 URL（读取文件并创建 blob URL）
  */
-async function getAudioUrl(audioFilePath: string): Promise<string | null> {
-  if (!isElectron() || !audioFilePath) return null;
+async function getAudioUrl(folderPath: string, audioFilePath: string): Promise<string | null> {
+  if (!isElectron() || !audioFilePath || !folderPath) return null;
 
   try {
+    const resolvedPath = toAbsolutePath(folderPath, audioFilePath);
     // 读取音频文件
-    const audioBuffer = await fsp.readFile(audioFilePath);
+    const audioBuffer = await fsp.readFile(resolvedPath);
     // 转换为标准 TypedArray，避免类型不兼容
     const normalizedBuffer = new Uint8Array(audioBuffer);
     // 创建 Blob
@@ -312,7 +337,9 @@ async function saveAudioFileInfo(
   detailId: string,
   audioFilePath: string
 ): Promise<boolean> {
-  console.log("[saveAudioFileInfo] 开始保存音频文件信息", { folderPath, imagePath, detailId, audioFilePath });
+  const relativeImagePath = toRelativePath(folderPath, imagePath);
+  const normalizedAudioPath = toRelativePath(folderPath, audioFilePath);
+  console.log("[saveAudioFileInfo] 开始保存音频文件信息", { folderPath, imagePath: relativeImagePath, detailId, audioFilePath: normalizedAudioPath });
 
   if (!isElectron()) {
     console.warn("[saveAudioFileInfo] 非 Electron 环境，跳过");
@@ -327,18 +354,18 @@ async function saveAudioFileInfo(
     console.log("[saveAudioFileInfo] 读取到现有配置");
   }
 
-  if (!config.images[imagePath]) {
+  if (!config.images[relativeImagePath]) {
     console.log("[saveAudioFileInfo] 图片配置不存在，创建新配置");
-    config.images[imagePath] = { ocrResult: null };
+    config.images[relativeImagePath] = { ocrResult: null };
   }
 
   // 更新 ocrResult 中对应 detail 的 audioPath
-  const ocrResult = config.images[imagePath].ocrResult;
+  const ocrResult = config.images[relativeImagePath].ocrResult;
   if (ocrResult && Array.isArray(ocrResult.details)) {
     const detail = ocrResult.details.find((d: any) => d.id === detailId);
     if (detail) {
-      detail.audioPath = audioFilePath;
-      console.log("[saveAudioFileInfo] 已更新 detail 的 audioPath", { detailId, audioFilePath });
+      detail.audioPath = normalizedAudioPath;
+      console.log("[saveAudioFileInfo] 已更新 detail 的 audioPath", { detailId, audioFilePath: normalizedAudioPath });
     } else {
       console.warn("[saveAudioFileInfo] 未找到对应的 detail", { detailId });
     }
@@ -364,7 +391,8 @@ async function getAudioFilePath(
   if (!isElectron()) return null;
 
   const config = await readConfig(folderPath);
-  const ocrResult = config?.images?.[imagePath]?.ocrResult;
+  const relativeImagePath = toRelativePath(folderPath, imagePath);
+  const ocrResult = config?.images?.[relativeImagePath]?.ocrResult;
   if (ocrResult && Array.isArray(ocrResult.details)) {
     const detail = ocrResult.details.find((d: any) => d.id === detailId);
     return detail?.audioPath || null;
@@ -500,7 +528,7 @@ async function saveProcessedImage(
     await fsp.writeFile(processedImagePath, imageBuffer);
     console.log("[saveProcessedImage] ✅ 处理图片保存成功:", processedImagePath, "大小:", imageBuffer.length, "bytes");
 
-    return processedImagePath;
+    return toRelativePath(folderPath, processedImagePath);
   } catch (error) {
     console.error("[saveProcessedImage] ❌ 保存处理图片失败:", error);
     return null;

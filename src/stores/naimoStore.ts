@@ -273,13 +273,13 @@ export const useNaimoStore = defineStore('naimo', () => {
    * 获取音频 URL
    */
   const getAudioUrl = async (audioFilePath: string): Promise<string | null> => {
-    if (!isAvailable.value) {
+    if (!isAvailable.value || !currentFolder.value) {
       return null;
     }
 
     try {
       const api = window.myPluginAPI;
-      return await api.getAudioUrl(audioFilePath);
+      return await api.getAudioUrl(currentFolder.value, audioFilePath);
     } catch (err: any) {
       error.value = err.message || '获取音频 URL 失败';
       return null;

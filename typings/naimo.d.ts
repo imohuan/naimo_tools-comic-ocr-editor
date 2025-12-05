@@ -1000,15 +1000,16 @@ export interface MyPluginAPI {
 	 * @param folderPath 项目文件夹路径
 	 * @param detailId OCR 文本明细的唯一标识
 	 * @param audioBuffer 音频数据 Buffer
-	 * @returns 保存的音频文件路径，如果保存失败则返回 null
+	 * @returns 保存的音频文件相对路径，如果保存失败则返回 null
 	 */
 	saveAudioFile(folderPath: string, detailId: string, audioBuffer: Buffer): Promise<string | null>;
 	/**
 	 * 获取音频文件的 URL（用于播放）
+	 * @param folderPath 项目文件夹路径
 	 * @param audioFilePath 音频文件路径
 	 * @returns 音频文件的 blob URL，如果获取失败则返回 null
 	 */
-	getAudioUrl(audioFilePath: string): Promise<string | null>;
+	getAudioUrl(folderPath: string, audioFilePath: string): Promise<string | null>;
 	/**
 	 * 保存音频文件信息到配置
 	 * @param folderPath 项目文件夹路径

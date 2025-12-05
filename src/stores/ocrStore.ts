@@ -19,6 +19,20 @@ export const useOcrStore = defineStore("ocr-store", () => {
 
   const naimoStore = useNaimoStore();
 
+  const normalizeFolderPath = (p?: string | null) => (p || '').replace(/\\/g, '/');
+
+  const toRelativePath = (targetPath?: string | null) => {
+    if (!targetPath) return "";
+    const folder = normalizeFolderPath(naimoStore.currentFolder);
+    if (!folder) return targetPath;
+    const normalizedTarget = normalizeFolderPath(targetPath);
+    if (normalizedTarget.startsWith(folder)) {
+      const trimmed = normalizedTarget.slice(folder.length).replace(/^\/+/, "");
+      return trimmed || targetPath;
+    }
+    return targetPath;
+  };
+
   // 将 ImageItem[] 序列化为 ProjectConfig 格式
   const serializeImages = (imageList: ImageItem[]): ProjectConfig => {
     const config: ProjectConfig = {
@@ -29,16 +43,22 @@ export const useOcrStore = defineStore("ocr-store", () => {
     };
 
     const getOcrResult = (detail: OcrTextDetail) => {
-      return omit(detail, ['audioUrl'])
+      const result = omit(detail, ['audioUrl']) as OcrTextDetail;
+      if (result.audioPath) {
+        result.audioPath = toRelativePath(result.audioPath);
+      }
+      return result;
     }
 
     for (const image of toRaw(imageList)) {
       if (!image.path) continue;
+      const relativeImagePath = toRelativePath(image.path);
       // 保存 ocrResult，即使为 null 也要保存（表示已处理但无结果）
       // 从映射中获取已保存的 processedImagePath
       const savedPath = processedImagePathMap.value.get(image.path) || "";
-      config.images[image.path] = {
-        processedImagePath: savedPath,
+      const relativeProcessedPath = savedPath ? toRelativePath(savedPath) : "";
+      config.images[relativeImagePath] = {
+        processedImagePath: relativeProcessedPath,
         ocrResult: image.ocrResult?.details.map(detail => getOcrResult(detail)) ?? [],
       };
     }
@@ -57,7 +77,8 @@ export const useOcrStore = defineStore("ocr-store", () => {
 
     const result = await Promise.all(folderImages.map(async (img) => {
       if (!img.path) return img;
-      const configItem = config.images[img.path];
+      const configKey = toRelativePath(img.path);
+      const configItem = config.images[configKey];
       if (configItem) {
         // 从配置中恢复 processedImageUrl（如果有 processedImagePath）
         let processedImageUrl: string | null = null;
