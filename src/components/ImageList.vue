@@ -663,7 +663,9 @@ const calculateTaskCount = () => {
   if (isBatchOcrSelected.value) {
     // 计算 OCR 任务数量
     ocrTaskCount = list.filter((img) => {
-      if (!img?.file) return false;
+      // 允许文件上传模式(file)或项目模式(path/url)的图片
+      const hasSource = !!(img?.file || img?.path || img?.url);
+      if (!hasSource) return false;
       if (batchMode.value === "skipDone" && img.ocrResult) return false;
       return true;
     }).length;

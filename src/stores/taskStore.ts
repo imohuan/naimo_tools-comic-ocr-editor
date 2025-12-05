@@ -613,8 +613,9 @@ export const useTaskStore = defineStore("task-store", () => {
     mode: "skipDone" | "forceAll" = "skipDone",
     options?: OcrRunnerOptions
   ) => {
+    // 允许文件上传模式(file)或项目模式(path/url)的图片进入批量 OCR
     const list = (ocrStore.images || []).filter(
-      (img) => img && img.file
+      (img) => img && (img.file || img.path || img.url)
     ) as ImageItem[];
     list.forEach((img) => {
       if (mode === "skipDone" && img.ocrResult) return;
