@@ -10,19 +10,13 @@ export interface OcrTextDetail {
   // 人物配音角色标识（微软 TTS 角色）
   voiceRole?: string;
   // 文本转语音生成状态
-  audioLoading?: boolean;
   audioUrl?: string | null;
-  audioError?: string | null;
+  // 音频文件路径（项目模式下的本地文件路径）
+  audioPath?: string;
   minX: number;
   minY: number;
   maxX: number;
   maxY: number;
-  textColor?: {
-    fg: [number];
-    bg: [number];
-  };
-  language?: string;
-  background?: string | null;
 }
 
 // API 返回的原始格式
@@ -36,12 +30,6 @@ export interface OcrApiResponse {
     angle?: number;
     prob?: number;
     is_bulleted_list?: boolean;
-    text_color?: {
-      fg: [number];
-      bg: [number];
-    };
-    background?: string | null;
-    language?: string;
   }>;
   debug_folder?: string;
   details?: OcrTextDetail[];
@@ -58,8 +46,11 @@ export interface OcrTextResult {
 export interface ImageItem {
   // 每张图片的唯一标识，用于异步 OCR 结果与图片一一对应
   id: string;
-  file: File;
+  file?: File; // Electron 项目模式下可能为 undefined
   url: string;
+  // Electron 项目模式专用字段
+  path?: string; // 图片文件路径（仅在 Electron 项目模式下存在）
+  name?: string; // 图片文件名（仅在 Electron 项目模式下存在）
   ocrResult: OcrTextResult | null;
   ocrLoading: boolean;
   // 处理好的图片 URL（如 final.png），如果存在则优先使用此图片替换原图

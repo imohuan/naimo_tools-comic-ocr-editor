@@ -29,8 +29,42 @@
       </button>
     </div>
 
-    <!-- 上传区 -->
+    <!-- 上传区 / 文件夹选择区 -->
     <div v-if="!isCollapsed" class="p-4 border-b border-gray-200">
+      <!-- Electron 项目模式：显示当前文件夹信息 -->
+      <div v-if="naimoStore.isProjectMode" class="mb-3">
+        <div class="flex items-center justify-between mb-2">
+          <span class="text-xs font-medium text-gray-700">当前项目</span>
+          <button
+            @click="handleCloseProject"
+            class="text-xs text-red-500 hover:text-red-700 transition-colors"
+            title="关闭项目"
+          >
+            <svg
+              class="w-4 h-4"
+              viewBox="0 0 24 24"
+              fill="none"
+              stroke="currentColor"
+              stroke-width="2"
+            >
+              <path d="M6 18L18 6M6 6l12 12" />
+            </svg>
+          </button>
+        </div>
+        <div class="flex items-center gap-2 text-xs">
+          <span
+            class="text-gray-600 truncate flex items-center gap-1"
+            :title="naimoStore.currentFolder || ''"
+          >
+            <span>📁</span>
+            <span>{{ getFolderName(naimoStore.currentFolder) }}</span>
+          </span>
+          <span class="text-gray-500 shrink-0"
+            >{{ naimoStore.folderImages.length }} 张图片</span
+          >
+        </div>
+      </div>
+
       <div
         ref="uploadArea"
         class="flex items-center justify-center flex-col border-2 border-dashed border-gray-300 rounded-lg p-4 text-center cursor-pointer transition-all duration-300 hover:border-blue-600 hover:bg-gray-50"
@@ -50,10 +84,19 @@
             stroke-linecap="round"
             stroke-linejoin="round"
             stroke-width="2"
-            d="M7 16a4 4 0 01-.88-7.903A5 5 0 1115.9 6L16 6a5 5 0 011 9.9M15 13l-3-3m0 0l-3 3m3-3v12"
+            :d="
+              naimoStore.isAvailable
+                ? 'M3 7v10a2 2 0 002 2h14a2 2 0 002-2V9a2 2 0 00-2-2h-6l-2-2H5a2 2 0 00-2 2z'
+                : 'M7 16a4 4 0 01-.88-7.903A5 5 0 1115.9 6L16 6a5 5 0 011 9.9M15 13l-3-3m0 0l-3 3m3-3v12'
+            "
           />
         </svg>
-        <p class="mt-1 text-xs text-gray-600">上传图片</p>
+        <p class="mt-1 text-xs text-gray-600">
+          {{ naimoStore.isAvailable ? "选择文件夹" : "上传图片" }}
+        </p>
+        <p v-if="naimoStore.isAvailable" class="mt-1 text-xs text-gray-400">
+          自动加载文件夹中的所有图片
+        </p>
         <input
           ref="fileInput"
           type="file"
@@ -363,13 +406,12 @@
         </svg>
         <span>{{ playerLoading ? "准备中" : "播放" }}</span>
       </button>
-
-          </div>
+    </div>
   </div>
 </template>
 
 <script setup lang="ts">
-import { ref, computed, toRefs } from "vue";
+import { ref, computed, toRefs, watch } from "vue";
 import { NPopover, NCheckbox } from "naive-ui";
 import { useOcrStore } from "../stores/ocrStore";
 import { useTaskStore } from "../stores/taskStore";
@@ -379,10 +421,13 @@ import { canvasEventBus, uiEventBus } from "../core/event-bus";
 import type { SequencePlaybackItem } from "./AudioSequencePlayer.vue";
 import { useNotify } from "../composables/useNotify";
 import { generateSilentAudio } from "../utils/audio";
+import { useNaimoStore } from "../stores/naimoStore";
 
 const store = useOcrStore();
 const taskStore = useTaskStore();
 const { success: successNotify, error: errorNotify } = useNotify();
+const naimoStore = useNaimoStore();
+
 const props = defineProps<{
   isCollapsed: boolean;
 }>();
@@ -395,12 +440,33 @@ const uploadArea = ref<HTMLDivElement>();
 const fileInput = ref<HTMLInputElement>();
 const isDragOver = ref(false);
 
+// 监听项目错误并使用 errorNotify 显示
+watch(
+  () => naimoStore.error,
+  (newError) => {
+    if (newError) {
+      errorNotify(newError);
+    }
+  }
+);
+
 const toggleCollapse = () => {
   emit("toggle-collapse");
 };
 
-const handleUploadClick = () => {
-  fileInput.value?.click();
+const handleUploadClick = async () => {
+  if (naimoStore.isAvailable) {
+    // Electron 模式：选择文件夹
+    // selectFolder 会设置 currentFolder，触发 ocrStore 的 watch 自动加载数据
+    const success = await naimoStore.selectFolder();
+    if (success) {
+      successNotify(`已选择文件夹：${getFolderName(naimoStore.currentFolder)}`);
+      // ocrStore 的 watch 会自动调用 loadProjectData，数据会从 JSON 自动加载
+    }
+  } else {
+    // 浏览器模式：上传文件
+    fileInput.value?.click();
+  }
 };
 
 const handleDragOver = () => {
@@ -431,6 +497,23 @@ const handleFileChange = (e: Event) => {
 const selectImage = (index: number) => {
   store.selectImage(index);
   canvasEventBus.emit("canvas:zoom-reset");
+};
+
+// 获取文件夹名称
+const getFolderName = (folderPath: string | null): string => {
+  if (!folderPath) return "";
+  if (typeof folderPath !== "string") {
+    console.warn("getFolderName: folderPath is not a string", folderPath);
+    return "";
+  }
+  return folderPath.split(/[/\\]/).pop() || folderPath;
+};
+
+// 关闭项目
+const handleCloseProject = () => {
+  naimoStore.closeProject();
+  store.clearAllImages();
+  successNotify("已关闭项目");
 };
 
 const removeImage = (index: number) => {
@@ -485,34 +568,6 @@ const canBatchExecute = computed(() => canBatchRun.value && hasBatchAction.value
 // 序列播放（针对所有图片，仅维护按钮 loading / 错误状态）
 const playerLoading = ref(false);
 const playerError = ref<string | null>(null);
-
-// 计算所有图片的文本音频是否都已就绪
-const allAudioReady = computed(() => {
-  const list = (images.value || []) as ImageItem[];
-  if (!list.length) return false;
-
-  const allDetails: (OcrTextDetail & {
-    id?: string;
-    audioLoading?: boolean;
-  })[] = [];
-  list.forEach((image) => {
-    if (image?.ocrResult?.details?.length) {
-      allDetails.push(
-        ...(image.ocrResult.details as (OcrTextDetail & {
-          id?: string;
-          audioLoading?: boolean;
-        })[])
-      );
-    }
-  });
-
-  if (!allDetails.length) return false;
-  return allDetails.every((detail) => {
-    const progress = detail.id ? taskStore.getProgressByKey(detail.id) : null;
-    const loading = progress?.loading ?? false;
-    return detail.audioUrl && !loading;
-  });
-});
 
 const canPlaySequence = computed(() => {
   return images.value.length > 0 && !playerLoading.value;

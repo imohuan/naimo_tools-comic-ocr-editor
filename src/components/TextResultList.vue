@@ -220,8 +220,7 @@
           </svg>
           <span>{{ playerLoading ? "准备中" : "单图播放" }}</span>
         </button>
-
-              </div>
+      </div>
     </div>
 
     <!-- 右侧拖拽条 -->
@@ -445,19 +444,6 @@ const canBatchRun = computed(() => {
   return taskStore.canBatchAudio && hasDetails.value;
 });
 
-const allAudioReady = computed(() => {
-  const list =
-    (detailsSource.value as Array<
-      OcrTextDetail & { id?: string; audioLoading?: boolean }
-    >) || [];
-  if (!list.length) return false;
-  return list.every((detail) => {
-    const progress = detail.id ? taskStore.getProgressByKey(detail.id) : null;
-    const loading = progress?.loading ?? false;
-    return detail?.audioUrl && !loading;
-  });
-});
-
 const canPlaySequence = computed(() => {
   return currentImage.value && !playerLoading.value;
 });
@@ -469,10 +455,7 @@ const handleSelectBatchMode = (key: "skipDone" | "forceAll") => {
 
 // 计算将要添加的音频任务数量
 const calculateAudioTaskCount = () => {
-  const list =
-    (detailsSource.value as Array<
-      OcrTextDetail & { id?: string; audioLoading?: boolean }
-    >) || [];
+  const list = (detailsSource.value as Array<OcrTextDetail & { id?: string }>) || [];
 
   return list.filter((detail) => {
     if (batchMode.value === "skipDone" && detail.audioUrl) return false;

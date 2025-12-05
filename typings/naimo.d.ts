@@ -875,16 +875,187 @@ declare const naimo: {
 };
 export type Naimo = typeof naimo;
 
-export {};
+/**
+ * 图片文件信息接口
+ */
+export interface ImageFileInfo {
+	/** 文件路径 */
+	path: string;
+	/** 文件名称 */
+	name: string;
+	/** 文件 URL（blob URL 或 data URL） */
+	url: string;
+}
+
+/**
+ * 项目配置接口
+ */
+export interface ProjectConfig {
+	/** 图片配置映射 */
+	images: {
+		[imagePath: string]: {
+			/** OCR 识别结果 */
+			ocrResult: any;
+			/** 音频文件映射（detailId -> audioFilePath） */
+			audioFiles?: {
+				[detailId: string]: string;
+			};
+		};
+	};
+	/** 配置版本号 */
+	version: string;
+	/** 创建时间（ISO 格式） */
+	createdAt: string;
+	/** 更新时间（ISO 格式） */
+	updatedAt: string;
+}
+
+/**
+ * 音频生成选项接口
+ */
+export interface AudioGenerateOptions {
+	/** 语音角色（微软 TTS 角色） */
+	voice?: string;
+	/** 语速（如 "+0%"） */
+	rate?: string;
+	/** 音量（如 "+0%"） */
+	volume?: string;
+	/** 音调（如 "+0Hz"） */
+	pitch?: string;
+}
+
+/**
+ * 插件自定义 API 接口
+ * 提供项目相关的文件操作、配置管理和音频生成功能
+ */
+export interface MyPluginAPI {
+	/**
+	 * 获取当前时间（格式化字符串）
+	 * @returns 格式化的时间字符串
+	 */
+	getCurrentTime(): string;
+	/**
+	 * 格式化文本（转换为大写）
+	 * @param text 要格式化的文本
+	 * @returns 格式化后的文本
+	 */
+	formatText(text: string): string;
+	/**
+	 * 获取远程数据
+	 * @param url 请求的 URL
+	 * @returns 返回 JSON 数据
+	 */
+	fetchData(url: string): Promise<any>;
+	/**
+	 * 检测是否为 Electron 环境
+	 * @returns 是否为 Electron 环境
+	 */
+	isElectron(): boolean;
+	/**
+	 * 选择文件夹
+	 * @returns 选中的文件夹路径，如果取消则返回 null
+	 */
+	selectFolder(): Promise<string | null>;
+	/**
+	 * 获取文件夹中的所有图片文件
+	 * @param folderPath 文件夹路径
+	 * @returns 图片文件信息数组
+	 */
+	getImagesInFolder(folderPath: string): Promise<ImageFileInfo[]>;
+	/**
+	 * 读取项目配置
+	 * @param folderPath 项目文件夹路径
+	 * @returns 项目配置对象，如果不存在则返回 null
+	 */
+	readConfig(folderPath: string): Promise<ProjectConfig | null>;
+	/**
+	 * 写入项目配置
+	 * @param folderPath 项目文件夹路径
+	 * @param config 要保存的配置对象
+	 * @returns 是否保存成功
+	 */
+	writeConfig(folderPath: string, config: ProjectConfig): Promise<boolean>;
+	/**
+	 * 保存 OCR 识别结果
+	 * @param folderPath 项目文件夹路径
+	 * @param imagePath 图片文件路径
+	 * @param ocrResult OCR 识别结果
+	 * @returns 是否保存成功
+	 */
+	saveOcrResult(folderPath: string, imagePath: string, ocrResult: any): Promise<boolean>;
+	/**
+	 * 获取 OCR 识别结果
+	 * @param folderPath 项目文件夹路径
+	 * @param imagePath 图片文件路径
+	 * @returns OCR 识别结果，如果不存在则返回 null
+	 */
+	getOcrResult(folderPath: string, imagePath: string): Promise<any | null>;
+	/**
+	 * 使用 Edge TTS 生成音频
+	 * @param text 要转换为语音的文本
+	 * @param options 音频生成选项（可选）
+	 * @returns 音频 Buffer，如果生成失败则返回 null
+	 */
+	generateAudioWithEdgeTTS(text: string, options?: AudioGenerateOptions): Promise<Buffer | null>;
+	/**
+	 * 保存音频文件
+	 * @param folderPath 项目文件夹路径
+	 * @param detailId OCR 文本明细的唯一标识
+	 * @param audioBuffer 音频数据 Buffer
+	 * @returns 保存的音频文件路径，如果保存失败则返回 null
+	 */
+	saveAudioFile(folderPath: string, detailId: string, audioBuffer: Buffer): Promise<string | null>;
+	/**
+	 * 获取音频文件的 URL（用于播放）
+	 * @param audioFilePath 音频文件路径
+	 * @returns 音频文件的 blob URL，如果获取失败则返回 null
+	 */
+	getAudioUrl(audioFilePath: string): Promise<string | null>;
+	/**
+	 * 保存音频文件信息到配置
+	 * @param folderPath 项目文件夹路径
+	 * @param imagePath 图片文件路径
+	 * @param detailId OCR 文本明细的唯一标识
+	 * @param audioFilePath 音频文件路径
+	 * @returns 是否保存成功
+	 */
+	saveAudioFileInfo(folderPath: string, imagePath: string, detailId: string, audioFilePath: string): Promise<boolean>;
+	/**
+	 * 获取音频文件路径
+	 * @param folderPath 项目文件夹路径
+	 * @param imagePath 图片文件路径
+	 * @param detailId OCR 文本明细的唯一标识
+	 * @returns 音频文件路径，如果不存在则返回 null
+	 */
+	getAudioFilePath(folderPath: string, imagePath: string, detailId: string): Promise<string | null>;
+}
 
 declare global {
-  interface Window {
-    /**
-     * Naimo Tools 插件 API
-     * 
-     * 可在插件的 HTML 页面中通过 window.naimo 访问
-     */
-    naimo: Naimo;
-  }
-  const naimo: Naimo;
+	interface Window {
+		/**
+		 * Naimo Tools 插件 API
+		 * 
+		 * 可在插件的 HTML 页面中通过 window.naimo 访问
+		 */
+		naimo: Naimo;
+		/**
+		 * 插件自定义 API
+		 * 
+		 * 提供项目相关的文件操作、配置管理和音频生成功能
+		 * 可在插件的 HTML 页面中通过 window.myPluginAPI 访问
+		 */
+		myPluginAPI: MyPluginAPI;
+	}
+	/**
+	 * Naimo Tools 插件 API（全局常量）
+	 * 
+	 * 可在插件的代码中直接使用 naimo 访问
+	 */
+	const naimo: Naimo;
+	/**
+	 * 插件自定义 API（全局常量）
+	 * 
+	 * 可在插件的代码中直接使用 myPluginAPI 访问
+	 */
+	const myPluginAPI: MyPluginAPI;
 }

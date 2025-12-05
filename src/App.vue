@@ -46,8 +46,8 @@
 
           <!-- 底部控制栏：相对于画布区域绝对定位并水平居中 -->
           <BottomToolbar
-            :current-page="ocrStore.images.length > 0 ? ocrStore.currentIndex + 1 : 0"
-            :total-pages="ocrStore.images.length"
+            :current-page="pageCurrent"
+            :total-pages="pageTotal"
             :display-zoom="displayZoom"
             :has-image="!!currentImage"
             :ocr-loading="ocrLoading"
@@ -68,10 +68,10 @@
 
           <!-- 页码显示 - 左下角 -->
           <div
-            v-if="ocrStore.images.length > 0"
+            v-if="pageTotal > 0"
             class="absolute bottom-4 left-4 z-50 text-gray-500 font-mono font-bold text-lg"
           >
-            {{ ocrStore.currentIndex + 1 }} / {{ ocrStore.images.length }}
+            {{ pageCurrent }} / {{ pageTotal }}
           </div>
 
           <!-- 缩放值显示 - 右下角 -->
@@ -96,7 +96,6 @@
       :show-icon="false"
       :style="{
         width: '80vw',
-        height: '80vh',
         'max-width': '1200px',
         'max-height': '800px',
       }"
@@ -228,6 +227,10 @@ const displayImage = computed(() => {
   return currentImage.value?.processedImageUrl || originalImage.value;
 });
 
+// 防御性：在 store 尚未就绪时避免 length 访问报错
+const pageTotal = computed(() => ocrStore.images?.length ?? 0);
+const pageCurrent = computed(() => (pageTotal.value > 0 ? ocrStore.currentIndex + 1 : 0));
+
 const displayZoom = computed(() => {
   const zoom = zoomLevel.value;
   if (typeof zoom !== "number" || isNaN(zoom) || !isFinite(zoom)) {
@@ -323,7 +326,7 @@ const shouldIgnoreShortcut = (event: KeyboardEvent) => {
 
 // 裁剪图片
 const cropImage = async (
-  imageFile: File,
+  imageSource: File | string,
   x: number,
   y: number,
   width: number,
@@ -331,6 +334,8 @@ const cropImage = async (
 ): Promise<File> => {
   return new Promise((resolve, reject) => {
     const img = new Image();
+    let objectUrl: string | null = null;
+
     img.onload = () => {
       // 验证坐标和尺寸，确保都是非负数且在图片范围内
       const imgWidth = img.width;
@@ -354,6 +359,10 @@ const cropImage = async (
         clampedX >= imgWidth ||
         clampedY >= imgHeight
       ) {
+        // 清理 blob URL
+        if (objectUrl) {
+          URL.revokeObjectURL(objectUrl);
+        }
         reject(new Error("裁剪区域无效：坐标超出图片范围"));
         return;
       }
@@ -363,6 +372,10 @@ const cropImage = async (
       canvas.height = clampedHeight;
       const ctx = canvas.getContext("2d");
       if (!ctx) {
+        // 清理 blob URL
+        if (objectUrl) {
+          URL.revokeObjectURL(objectUrl);
+        }
         reject(new Error("无法创建画布上下文"));
         return;
       }
@@ -377,23 +390,59 @@ const cropImage = async (
         clampedWidth,
         clampedHeight
       );
+
+      // 确定文件类型和名称
+      const fileType =
+        typeof imageSource === "string" ? "image/png" : imageSource.type || "image/png";
+      let fileName = "cropped.png";
+      if (typeof imageSource === "string") {
+        // 尝试从 URL 中提取文件名（排除 blob: 和 data: URL）
+        if (!imageSource.startsWith("blob:") && !imageSource.startsWith("data:")) {
+          const urlPath = imageSource.split("?")[0]; // 移除查询参数
+          const pathParts = urlPath.split("/");
+          const extractedName = pathParts[pathParts.length - 1];
+          if (extractedName && extractedName.includes(".")) {
+            fileName = extractedName;
+          }
+        }
+      } else {
+        fileName = imageSource.name || "cropped.png";
+      }
+
       canvas.toBlob(
         (blob) => {
+          // 清理 blob URL
+          if (objectUrl) {
+            URL.revokeObjectURL(objectUrl);
+          }
           if (!blob) {
             reject(new Error("裁剪失败"));
             return;
           }
-          const croppedFile = new File([blob], imageFile.name, {
-            type: imageFile.type,
+          const croppedFile = new File([blob], fileName, {
+            type: fileType,
           });
           resolve(croppedFile);
         },
-        imageFile.type,
+        fileType,
         1.0
       );
     };
-    img.onerror = () => reject(new Error("图片加载失败"));
-    img.src = URL.createObjectURL(imageFile);
+    img.onerror = () => {
+      // 清理 blob URL
+      if (objectUrl) {
+        URL.revokeObjectURL(objectUrl);
+      }
+      reject(new Error("图片加载失败"));
+    };
+
+    // 根据输入类型设置图片源
+    if (typeof imageSource === "string") {
+      img.src = imageSource;
+    } else {
+      objectUrl = URL.createObjectURL(imageSource);
+      img.src = objectUrl;
+    }
   });
 };
 
@@ -425,7 +474,7 @@ const handleWaitingRectComplete = async (rect: {
 
     // 裁剪图片
     const croppedFile = await cropImage(
-      targetImage.file,
+      targetImage.file || targetImage.url,
       imageCoords.x,
       imageCoords.y,
       imageCoords.width,
@@ -526,7 +575,7 @@ const handleReOcrDetail = async (detailIndex: number) => {
 
   try {
     const croppedFile = await cropImage(
-      targetImage.file,
+      targetImage.file || targetImage.url,
       detail.minX,
       detail.minY,
       cropWidth,

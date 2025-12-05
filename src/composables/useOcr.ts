@@ -132,14 +132,14 @@ export function useOcr() {
                         minY: trans.minY,
                         maxX: trans.maxX,
                         maxY: trans.maxY,
-                        textColor: trans.text_color
-                          ? {
-                            fg: trans.text_color.fg || [0],
-                            bg: trans.text_color.bg || [255],
-                          }
-                          : undefined,
-                        language: trans.language,
-                        background: trans.background || null,
+                        // textColor: trans.text_color
+                        //   ? {
+                        //     fg: trans.text_color.fg || [0],
+                        //     bg: trans.text_color.bg || [255],
+                        //   }
+                        //   : undefined,
+                        // language: trans.language,
+                        // background: trans.background || null,
                       };
                     }).filter((f: any) => {
                       return f.text.length > 1

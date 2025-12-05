@@ -8,8 +8,9 @@ export const useOcrConfigStore = defineStore("ocr-config-store", () => {
   const config = ref<OcrConfig | null>(null);
   const loading = ref(false);
   const error = ref<string | null>(null);
-  
-  const applySideEffects = (cfg: OcrConfig) => {
+
+  const applySideEffects = (cfg: OcrConfig | null | undefined) => {
+    if (!cfg) return;
     // 将配置中的音频并发数同步到任务 Store
     const taskStore = useTaskStore();
     if (cfg.audio_concurrency && cfg.audio_concurrency > 0) {
@@ -23,8 +24,8 @@ export const useOcrConfigStore = defineStore("ocr-config-store", () => {
     error.value = null;
     try {
       const cfg = await getOcrConfig();
-      config.value = cfg;
-      applySideEffects(cfg);
+      config.value = cfg ?? null;
+      applySideEffects(cfg ?? null);
     } catch (e: any) {
       console.error("加载 OCR 配置失败:", e);
       error.value = e?.message || "加载配置失败";

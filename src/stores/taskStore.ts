@@ -4,6 +4,7 @@ import { useOcrStore } from "./ocrStore";
 import type { ImageItem, OcrTextDetail, OcrTextResult } from "../types";
 import { useEdgeTts } from "../composables/useEdgeTts";
 import { useNotify } from "../composables/useNotify";
+import { useNaimoStore } from "./naimoStore";
 
 export type TaskKind = "ocr" | "audio";
 export type TaskStatus = "pending" | "running" | "success" | "error" | "cancelled";
@@ -50,6 +51,7 @@ export const useTaskStore = defineStore("task-store", () => {
   const ocrStore = useOcrStore();
   const { generateAudioUrl } = useEdgeTts();
   const { error: notifyError } = useNotify();
+  const naimoStore = useNaimoStore();
 
   const tasks = ref<TaskItem[]>([]);
   const queues: Record<TaskKind, TaskRunner[]> = {
@@ -347,12 +349,71 @@ export const useTaskStore = defineStore("task-store", () => {
         }
 
         try {
-          const audioUrl = await generateAudioUrl(text, voice, {
-            signal: abortController.signal,
-          });
+          let audioUrl: string | null = null;
+          let audioFilePath: string | null = null;
+          const image = ocrStore.images.find((img) => img.id === imageId);
+
+          if (naimoStore.isProjectMode && image?.path && detailId) {
+            // 项目模式：使用本地音频生成
+            console.log('[taskStore.createAudioRunner] 项目模式：开始生成音频', {
+              imagePath: image.path,
+              detailId,
+              text: text.substring(0, 50) + '...',
+              voice
+            });
+
+            const audioBuffer = await naimoStore.generateAudio(text, {
+              voice,
+              rate: '+0%',
+              volume: '+0%',
+              pitch: '+0Hz',
+            });
+
+            if (audioBuffer) {
+              console.log('[taskStore.createAudioRunner] 音频生成成功，开始保存', {
+                bufferSize: audioBuffer.length
+              });
+              // 立即保存音频文件到本地
+              audioFilePath = await naimoStore.saveAudioFile(detailId, audioBuffer);
+              if (audioFilePath) {
+                console.log('[taskStore.createAudioRunner] 音频文件保存成功，获取 URL', {
+                  audioFilePath
+                });
+                audioUrl = await naimoStore.getAudioUrl(audioFilePath);
+                // 立即保存音频文件信息到配置
+                console.log('[taskStore.createAudioRunner] 保存音频文件信息到配置', {
+                  imagePath: image.path,
+                  detailId,
+                  audioFilePath
+                });
+                const saveInfoSuccess = await naimoStore.saveAudioFileInfo(image.path, detailId, audioFilePath);
+                if (saveInfoSuccess) {
+                  console.log('[taskStore.createAudioRunner] ✅ 音频保存流程完成', {
+                    audioUrl: audioUrl ? '已生成' : '未生成',
+                    audioFilePath
+                  });
+                } else {
+                  console.error('[taskStore.createAudioRunner] ⚠️ 音频文件已保存，但保存配置信息失败');
+                }
+              } else {
+                console.error('[taskStore.createAudioRunner] ❌ 音频文件保存失败');
+                throw new Error('音频文件保存失败');
+              }
+            } else {
+              console.error('[taskStore.createAudioRunner] ❌ 音频生成失败，返回 null');
+              throw new Error('音频生成失败');
+            }
+          } else {
+            // 浏览器模式：使用网络音频生成
+            const generatedUrl = await generateAudioUrl(text, voice, {
+              signal: abortController.signal,
+            });
+            audioUrl = generatedUrl || null;
+            // 注意：浏览器模式下无法直接保存到本地文件系统，只能创建 blob URL
+          }
 
           // 新音频成功生成后，销毁旧的音频 URL
-          if (oldAudioUrl && audioUrl) {
+          if (oldAudioUrl && audioUrl && oldAudioUrl.startsWith('blob:')) {
             try {
               URL.revokeObjectURL(oldAudioUrl);
             } catch (e) {
@@ -361,9 +422,8 @@ export const useTaskStore = defineStore("task-store", () => {
           }
 
           updateDetailById(imageId, detailId, (d) => {
-            d.audioLoading = false;
             d.audioUrl = audioUrl || null;
-            d.audioError = null;
+            d.audioPath = audioFilePath || undefined;
           });
           clearTaskProgress(detailId);
         } catch (error: any) {
@@ -377,11 +437,7 @@ export const useTaskStore = defineStore("task-store", () => {
             loading: false,
             error: msg,
           });
-          // 更新对应明细的音频状态
-          updateDetailById(imageId, detailId, (d) => {
-            d.audioLoading = false;
-            d.audioError = msg;
-          });
+          // 错误状态已通过 taskStore 的 progress 系统处理，无需更新 detail
           // 使用 Naive UI notify 弹出错误提示
           notifyError(`音频生成失败：${msg}`);
           if (error?.name !== "AbortError") {

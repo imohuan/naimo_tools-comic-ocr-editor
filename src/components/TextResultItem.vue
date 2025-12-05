@@ -274,16 +274,21 @@ const emit = defineEmits<Emits>();
 
 const taskStore = useTaskStore();
 
+// 加载状态：从 progress 获取（任务正在执行时）
 const audioLoading = computed(() => props.progress?.loading ?? false);
 
-// 检查是否在等待队列中
+// 等待状态：任务在队列中等待（pending 状态且不是 loading）
 const isPending = computed(() => {
-  return props.detail.id ? taskStore.isPendingAudioTask(props.detail.id) : false;
+  if (!props.detail.id || audioLoading.value) return false;
+  return taskStore.isPendingAudioTask(props.detail.id);
 });
 
-// 检查是否已有任务（等待中或运行中）
+// 运行状态：有任务正在运行（running 状态且不是 loading 也不是 pending）
+// 这种情况理论上不应该出现，因为 running 状态时应该有 progress.loading = true
+// 但为了容错，保留这个判断
 const hasTask = computed(() => {
-  return props.detail.id ? taskStore.hasAudioTask(props.detail.id) : false;
+  if (!props.detail.id || audioLoading.value || isPending.value) return false;
+  return taskStore.hasAudioTask(props.detail.id);
 });
 
 // 文本字段有可能是对象（如 { CHS, zh }），统一转成字符串
