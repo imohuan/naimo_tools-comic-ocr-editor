@@ -248,6 +248,8 @@ export const useOcrStore = defineStore("ocr-store", () => {
     if (resourceLoading.value.get(`img:${key}`)) return;
     resourceLoading.value.set(`img:${key}`, true);
     try {
+      console.log("ensureImageUrl", image);
+
       const url = await naimoStore.getImageUrl(image.path);
       if (url) {
         image.url = url;
@@ -269,6 +271,7 @@ export const useOcrStore = defineStore("ocr-store", () => {
     if (resourceLoading.value.get(`processed:${processedPath}`)) return;
     resourceLoading.value.set(`processed:${processedPath}`, true);
     try {
+      console.log("ensureProcessedImageUrl", image);
       const url = await naimoStore.getProcessedImageUrl(processedPath);
       if (url) {
         image.processedImageUrl = url;
@@ -286,6 +289,7 @@ export const useOcrStore = defineStore("ocr-store", () => {
       if (resourceLoading.value.get(cacheKey)) return;
       resourceLoading.value.set(cacheKey, true);
       try {
+        console.log("ensureAudioUrls", image);
         const url = await naimoStore.getAudioUrl(detail.audioPath);
         if (url) {
           detail.audioUrl = url;

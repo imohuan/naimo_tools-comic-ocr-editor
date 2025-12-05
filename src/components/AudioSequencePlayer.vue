@@ -297,7 +297,6 @@ import {
 } from "@vueuse/core";
 import { useSmoothProgress } from "../composables/useSmoothProgress";
 import { NSlider } from "naive-ui";
-import { mergeAudioFiles } from "../utils/audio";
 
 export interface SequencePlaybackRect {
   minX: number;
@@ -316,6 +315,14 @@ export interface SequencePlaybackItem {
   duration?: number | null;
 }
 
+type LazyPlaybackItem = SequencePlaybackItem & {
+  __loaded?: boolean;
+  __loading?: Promise<void> | null;
+  __lazyLoad?: () => Promise<void>;
+};
+
+const PRELOAD_FORWARD = 2;
+
 const props = defineProps<{
   modelValue: boolean;
   playlist: SequencePlaybackItem[];
@@ -332,7 +339,6 @@ const canvasRef = ref<HTMLCanvasElement>();
 const audioRef = ref<HTMLAudioElement>();
 
 const durations = ref<number[]>([]);
-const mergedAudioUrl = ref<string | null>(null);
 const currentIndex = ref(0);
 const isPlaying = ref(false);
 const isPreparing = ref(false);
@@ -441,15 +447,37 @@ const canInteractTimeline = computed(() => canPlay.value && !isPreparing.value);
 
 const imageCache = new Map<string, HTMLImageElement>();
 
+const getLazyItem = (index: number) =>
+  props.playlist[index] as LazyPlaybackItem | undefined;
+
+const loadPlaybackItem = async (index: number) => {
+  const item = getLazyItem(index);
+  if (!item) return null;
+  if (item.__loaded) return item;
+  if (item.__lazyLoad) {
+    await item.__lazyLoad();
+  }
+  return item;
+};
+
+const preloadAround = async (center: number) => {
+  const tasks: Promise<void>[] = [];
+  const max = Math.min(props.playlist.length - 1, center + PRELOAD_FORWARD);
+  for (let i = center; i <= max; i++) {
+    const item = getLazyItem(i);
+    if (!item?.__lazyLoad || item.__loaded) continue;
+    tasks.push(item.__lazyLoad());
+  }
+  if (tasks.length) {
+    await Promise.all(tasks);
+  }
+};
+
 const resetPlayerState = () => {
   const audio = audioRef.value;
   if (audio) {
     audio.pause();
     audio.src = "";
-  }
-  if (mergedAudioUrl.value) {
-    URL.revokeObjectURL(mergedAudioUrl.value);
-    mergedAudioUrl.value = null;
   }
   currentIndex.value = 0;
   isPlaying.value = false;
@@ -596,87 +624,88 @@ const handleMouseUp = () => {
 const prepareTimeline = async () => {
   if (!props.playlist.length) {
     durations.value = [];
-    if (mergedAudioUrl.value) {
-      URL.revokeObjectURL(mergedAudioUrl.value);
-      mergedAudioUrl.value = null;
-    }
     return;
   }
-
-  console.log("播放列表", props.playlist);
 
   isPreparing.value = true;
   preparationError.value = null;
   try {
-    // 如果播放项已经包含时长，先行填充时间轴，减少等待
-    const presetDurations = props.playlist
-      .map((item) => item.duration)
-      .filter((d): d is number => Number.isFinite(d));
-    if (presetDurations.length === props.playlist.length) {
-      durations.value = presetDurations;
-    }
-
-    // 额外步骤：将整列音频合并为一个音频文件，供播放器统一播放
-    const files: File[] = [];
-    for (let i = 0; i < props.playlist.length; i++) {
-      const url = props.playlist[i]?.audio;
-      if (!url) continue;
-      const response = await fetch(url);
-      if (!response.ok) {
-        throw new Error(`获取音频失败: ${response.status}`);
-      }
-      const blob = await response.blob();
-      const file = new File([blob], `segment-${i}.wav`, {
-        type: blob.type || "audio/wav",
-      });
-      files.push(file);
-    }
-
-    if (!files.length) {
-      throw new Error("未能获取到有效的音频文件");
-    }
-
-    const { blob: mergedBlob, durations: mergedDurations } = await mergeAudioFiles(files);
-    console.log("Merged audio durations:", mergedDurations);
-    durations.value = mergedDurations;
-
-    if (mergedAudioUrl.value) {
-      URL.revokeObjectURL(mergedAudioUrl.value);
-    }
-    mergedAudioUrl.value = URL.createObjectURL(mergedBlob);
-
-    const audio = audioRef.value;
-    if (audio && mergedAudioUrl.value) {
-      audio.pause();
-      audio.src = mergedAudioUrl.value;
-      audio.load();
-    }
+    // 使用播放项内置的时长，无需一次性合并音频
+    durations.value = props.playlist.map((item) =>
+      Number.isFinite(item.duration) ? Number(item.duration) : 0
+    );
+    await preloadAround(0);
   } catch (error: any) {
     preparationError.value =
       typeof error?.message === "string" ? error.message : "时间轴准备失败";
     durations.value = [];
-    if (mergedAudioUrl.value) {
-      URL.revokeObjectURL(mergedAudioUrl.value);
-      mergedAudioUrl.value = null;
-    }
   } finally {
     isPreparing.value = false;
   }
+};
+
+const updatePlaybackPosition = async (
+  index: number,
+  globalTargetTime: number,
+  autoPlay: boolean
+) => {
+  if (!canPlay.value) return;
+  const audio = audioRef.value;
+  if (!audio) return;
+
+  const item = await loadPlaybackItem(index);
+  if (!item) return;
+
+  const offsets = clipOffsets.value;
+  const clipStart = offsets[index] ?? 0;
+  const clipDuration = durations.value[index] ?? 0;
+  const localTarget = Math.min(
+    Math.max(globalTargetTime - clipStart, 0),
+    Math.max(clipDuration, 0)
+  );
+
+  const needSwitch =
+    audio.dataset.currentIndex !== String(index) || audio.src !== item.audio;
+  if (needSwitch) {
+    audio.pause();
+    audio.src = item.audio;
+    audio.dataset.currentIndex = String(index);
+    audio.load();
+  }
+
+  try {
+    audio.currentTime = localTarget;
+  } catch {
+    // ignore
+  }
+
+  currentIndex.value = index;
+  const effectiveGlobal = clipStart + (audio.currentTime || localTarget);
+  globalTime.value = effectiveGlobal;
+  timelineValue.value = effectiveGlobal;
+  setSmoothValue(effectiveGlobal);
+
+  if (autoPlay && clipDuration > 0 && effectiveGlobal < clipStart + clipDuration) {
+    try {
+      await audio.play();
+      isPlaying.value = true;
+    } catch (error) {
+      console.warn("音频播放失败", error);
+      isPlaying.value = false;
+    }
+  } else if (!autoPlay) {
+    audio.pause();
+    isPlaying.value = false;
+  }
+
+  preloadAround(index + 1);
 };
 
 const startPlaybackSession = async () => {
   if (!isActive.value) return;
   if (!props.playlist.length) return;
   await prepareTimeline();
-  // 合并音频后从头开始准备播放（不自动播放）
-  const audio = audioRef.value;
-  if (audio) {
-    try {
-      audio.currentTime = 0;
-    } catch {
-      // 忽略设置失败
-    }
-  }
+  await updatePlaybackPosition(0, 0, false);
   await drawFrame();
 };
 
@@ -684,33 +713,26 @@ const togglePlay = async () => {
   if (!canPlay.value) return;
   const audio = audioRef.value;
   if (!audio) return;
+  const offsets = clipOffsets.value;
+  const base = offsets[currentIndex.value] ?? 0;
 
   if (isPlaying.value) {
     audio.pause();
     isPlaying.value = false;
-    // 停止平滑更新，同步到当前实际时间
     stopSmoothing();
-    const currentTime = audio.currentTime || 0;
-    const [clamped] = getTimeForInfo(currentTime);
-    setSmoothValue(clamped);
-    timelineValue.value = clamped;
+    const current = base + (audio.currentTime || 0);
+    setSmoothValue(current);
+    timelineValue.value = current;
     return;
   }
 
-  try {
-    await audio.play();
-    isPlaying.value = true;
-    // 播放开始时立即启动平滑更新
-    const currentTime = audio.currentTime || 0;
-    const [clamped] = getTimeForInfo(currentTime);
-    startSmoothing(clamped, () => {
-      const current = audio.currentTime || 0;
-      return Math.min(current, totalDuration.value);
-    });
-  } catch (error) {
-    console.warn("无法播放音频", error);
-    isPlaying.value = false;
-  }
+  const targetGlobal = base + (audio.currentTime || 0);
+  await updatePlaybackPosition(currentIndex.value, targetGlobal, true);
+  const [clamped] = getTimeForInfo(targetGlobal);
+  startSmoothing(clamped, () => {
+    const current = base + (audio.currentTime || 0);
+    return Math.min(current, totalDuration.value);
+  });
 };
 
 const handlePrev = async () => {
@@ -764,29 +786,7 @@ const seekTo = async (time: number, autoPlay = isPlaying.value) => {
   if (total <= 0) return;
   // 根据目标时间定位到对应片段索引
   const [clamped, targetIndex] = getTimeForInfo(time);
-  currentIndex.value = targetIndex;
-  globalTime.value = clamped;
-  timelineValue.value = clamped;
-  setSmoothValue(clamped); // 同步平滑值
-
-  try {
-    audio.currentTime = clamped;
-  } catch {
-    // 忽略设置失败
-  }
-
-  if (autoPlay && clamped < total) {
-    try {
-      await audio.play();
-      isPlaying.value = true;
-    } catch (error) {
-      console.warn("音频播放失败", error);
-      isPlaying.value = false;
-    }
-  } else if (!autoPlay) {
-    audio.pause();
-    isPlaying.value = false;
-  }
+  await updatePlaybackPosition(targetIndex, clamped, autoPlay && clamped < total);
 };
 
 // 音量 / 倍速联动 audio 元素
@@ -826,24 +826,30 @@ const handleTimelineUpdate = async (value: number | [number, number]) => {
   handleTimelineChange();
 };
 
-const handleAudioTimeUpdate = (_e: Event) => {
+const handleAudioTimeUpdate = async (_e: Event) => {
   if (!canPlay.value) return;
   if (isDraggingTimeline.value) return;
   const audio = audioRef.value;
   if (!audio) return;
 
-  const time = audio.currentTime || 0;
-  const [clamped, targetIndex] = getTimeForInfo(time);
+  const offsets = clipOffsets.value;
+  const clipStart = offsets[currentIndex.value] ?? 0;
+  const clipDuration = durations.value[currentIndex.value] ?? 0;
+  const localTime = audio.currentTime || 0;
+  const global = Math.min(clipStart + localTime, clipStart + (clipDuration || localTime));
+  const [clamped, targetIndex] = getTimeForInfo(global);
 
-  // 播放时使用平滑更新，暂停时直接更新
+  if (targetIndex !== currentIndex.value) {
+    await updatePlaybackPosition(targetIndex, clamped, isPlaying.value);
+  }
+
   if (isPlaying.value) {
-    // 启动平滑更新，提供实时的当前时间获取函数
     startSmoothing(clamped, () => {
-      const currentTime = audio.currentTime || 0;
+      const currentTime =
+        (audio.currentTime || 0) + (clipOffsets.value[currentIndex.value] ?? 0);
       return Math.min(currentTime, totalDuration.value);
     });
   } else {
-    // 暂停时停止平滑更新并直接设置值
     stopSmoothing();
     setSmoothValue(clamped);
     timelineValue.value = clamped;
@@ -851,20 +857,34 @@ const handleAudioTimeUpdate = (_e: Event) => {
 
   globalTime.value = clamped;
   currentIndex.value = targetIndex;
+  preloadAround(targetIndex);
 };
 
 const handleAudioLoadedMetadata = () => {
   const audio = audioRef.value;
   if (!audio) return;
-  const current = audio.currentTime || 0;
-  const clamped = Math.min(current, totalDuration.value);
+  const idx = currentIndex.value;
+  const loadedDuration = audio.duration;
+  if (Number.isFinite(loadedDuration) && loadedDuration > 0) {
+    const next = [...durations.value];
+    next[idx] = loadedDuration;
+    durations.value = next;
+  }
+  const offsets = clipOffsets.value;
+  const global = (offsets[idx] ?? 0) + (audio.currentTime || 0);
+  const clamped = Math.min(global, totalDuration.value || global);
   globalTime.value = clamped;
   timelineValue.value = clamped;
 };
 
-const handleAudioEnded = () => {
+const handleAudioEnded = async () => {
   const audio = audioRef.value;
   if (!audio) return;
+  const nextIndex = currentIndex.value + 1;
+  if (nextIndex < props.playlist.length) {
+    await updatePlaybackPosition(nextIndex, clipOffsets.value[nextIndex] ?? 0, true);
+    return;
+  }
   isPlaying.value = false;
   globalTime.value = totalDuration.value;
   timelineValue.value = totalDuration.value;
