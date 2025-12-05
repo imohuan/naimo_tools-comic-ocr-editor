@@ -33,9 +33,7 @@ const generateTaskId = () => {
   if (typeof crypto !== "undefined" && "randomUUID" in crypto) {
     return crypto.randomUUID();
   }
-  return `task_${Date.now().toString(36)}_${Math.random()
-    .toString(36)
-    .slice(2, 10)}`;
+  return `task_${Date.now().toString(36)}_${Math.random().toString(36).slice(2, 10)}`;
 };
 
 export type OcrApplyResultFn = (
@@ -72,10 +70,7 @@ export const useTaskStore = defineStore("task-store", () => {
   const progressStates = ref<Record<string, TaskProgressState>>({});
   const defaultProgressState: TaskProgressState = { loading: false, error: null };
 
-  const setTaskProgress = (
-    key: string,
-    patch: Partial<TaskProgressState>
-  ) => {
+  const setTaskProgress = (key: string, patch: Partial<TaskProgressState>) => {
     const prev = progressStates.value[key] || defaultProgressState;
     progressStates.value = {
       ...progressStates.value,
@@ -103,37 +98,37 @@ export const useTaskStore = defineStore("task-store", () => {
 
   // 检查特定detail是否在等待队列中
   const isPendingAudioTask = (detailId: string): boolean => {
-    return tasks.value.some(task =>
-      task.kind === 'audio' &&
-      task.detailId === detailId &&
-      task.status === 'pending'
+    return tasks.value.some(
+      (task) =>
+        task.kind === "audio" && task.detailId === detailId && task.status === "pending"
     );
   };
 
   // 检查特定image是否在OCR等待队列中
   const isPendingOcrTask = (imageId: string): boolean => {
-    return tasks.value.some(task =>
-      task.kind === 'ocr' &&
-      task.imageId === imageId &&
-      task.status === 'pending'
+    return tasks.value.some(
+      (task) =>
+        task.kind === "ocr" && task.imageId === imageId && task.status === "pending"
     );
   };
 
   // 检查特定detail是否已有音频任务（等待中或运行中）
   const hasAudioTask = (detailId: string): boolean => {
-    return tasks.value.some(task =>
-      task.kind === 'audio' &&
-      task.detailId === detailId &&
-      (task.status === 'pending' || task.status === 'running')
+    return tasks.value.some(
+      (task) =>
+        task.kind === "audio" &&
+        task.detailId === detailId &&
+        (task.status === "pending" || task.status === "running")
     );
   };
 
   // 检查特定image是否已有OCR任务（等待中或运行中）
   const hasOcrTask = (imageId: string): boolean => {
-    return tasks.value.some(task =>
-      task.kind === 'ocr' &&
-      task.imageId === imageId &&
-      (task.status === 'pending' || task.status === 'running')
+    return tasks.value.some(
+      (task) =>
+        task.kind === "ocr" &&
+        task.imageId === imageId &&
+        (task.status === "pending" || task.status === "running")
     );
   };
 
@@ -221,10 +216,7 @@ export const useTaskStore = defineStore("task-store", () => {
             errorMessage: "任务已取消",
           });
         } else {
-          const msg =
-            typeof error?.message === "string"
-              ? error.message
-              : "任务执行失败";
+          const msg = typeof error?.message === "string" ? error.message : "任务执行失败";
           updateTask(runner.taskId, {
             status: "error",
             errorMessage: msg,
@@ -313,10 +305,9 @@ export const useTaskStore = defineStore("task-store", () => {
   // 删除特定detail的音频任务（等待中或运行中）
   const cancelAudioTask = (detailId: string): boolean => {
     // 先检查等待中的任务
-    const pendingTask = tasks.value.find(task =>
-      task.kind === 'audio' &&
-      task.detailId === detailId &&
-      task.status === 'pending'
+    const pendingTask = tasks.value.find(
+      (task) =>
+        task.kind === "audio" && task.detailId === detailId && task.status === "pending"
     );
 
     if (pendingTask) {
@@ -324,10 +315,9 @@ export const useTaskStore = defineStore("task-store", () => {
     }
 
     // 再检查运行中的任务
-    const runningTask = tasks.value.find(task =>
-      task.kind === 'audio' &&
-      task.detailId === detailId &&
-      task.status === 'running'
+    const runningTask = tasks.value.find(
+      (task) =>
+        task.kind === "audio" && task.detailId === detailId && task.status === "running"
     );
 
     if (runningTask) {
@@ -343,10 +333,7 @@ export const useTaskStore = defineStore("task-store", () => {
     processQueue("audio");
   };
 
-  const createAudioRunner = (
-    imageId: string,
-    detailId: string
-  ): TaskRunner | null => {
+  const createAudioRunner = (imageId: string, detailId: string): TaskRunner | null => {
     const found = findDetailById(imageId, detailId);
     if (!found) return null;
     const { detail } = found;
@@ -354,8 +341,7 @@ export const useTaskStore = defineStore("task-store", () => {
     const text = (detail.translatedText || detail.text || "").toString().trim();
     if (!text) return null;
 
-    const voice =
-      (detail.voiceRole && detail.voiceRole.trim()) || "zh-CN-XiaoxiaoNeural";
+    const voice = (detail.voiceRole && detail.voiceRole.trim()) || "zh-CN-XiaoxiaoNeural";
 
     const task = addTask({
       kind: "audio",
@@ -378,7 +364,10 @@ export const useTaskStore = defineStore("task-store", () => {
         // 保存旧的音频 URL，在新音频成功生成后再销毁（这是用户主动触发的重新生成操作）
         let oldAudioUrl: string | null = null;
         const foundAgain = findDetailById(imageId, detailId);
-        if (foundAgain?.detail.audioUrl && foundAgain.detail.audioUrl.startsWith("blob:")) {
+        if (
+          foundAgain?.detail.audioUrl &&
+          foundAgain.detail.audioUrl.startsWith("blob:")
+        ) {
           oldAudioUrl = foundAgain.detail.audioUrl;
         }
 
@@ -389,53 +378,59 @@ export const useTaskStore = defineStore("task-store", () => {
 
           if (naimoStore.isProjectMode && image?.path && detailId) {
             // 项目模式：使用本地音频生成
-            console.log('[taskStore.createAudioRunner] 项目模式：开始生成音频', {
+            console.log("[taskStore.createAudioRunner] 项目模式：开始生成音频", {
               imagePath: image.path,
               detailId,
-              text: text.substring(0, 50) + '...',
-              voice
+              text: text.substring(0, 50) + "...",
+              voice,
             });
 
             const audioBuffer = await naimoStore.generateAudio(text, {
               voice,
-              rate: '+0%',
-              volume: '+0%',
-              pitch: '+0Hz',
+              rate: "+0%",
+              volume: "+0%",
+              pitch: "+0Hz",
             });
 
             if (audioBuffer) {
-              console.log('[taskStore.createAudioRunner] 音频生成成功，开始保存', {
-                bufferSize: audioBuffer.length
+              console.log("[taskStore.createAudioRunner] 音频生成成功，开始保存", {
+                bufferSize: audioBuffer.length,
               });
               // 立即保存音频文件到本地
               audioFilePath = await naimoStore.saveAudioFile(detailId, audioBuffer);
               if (audioFilePath) {
-                console.log('[taskStore.createAudioRunner] 音频文件保存成功，获取 URL', {
-                  audioFilePath
+                console.log("[taskStore.createAudioRunner] 音频文件保存成功，获取 URL", {
+                  audioFilePath,
                 });
                 audioUrl = await naimoStore.getAudioUrl(audioFilePath);
                 // 立即保存音频文件信息到配置
-                console.log('[taskStore.createAudioRunner] 保存音频文件信息到配置', {
+                console.log("[taskStore.createAudioRunner] 保存音频文件信息到配置", {
                   imagePath: image.path,
                   detailId,
-                  audioFilePath
+                  audioFilePath,
                 });
-                const saveInfoSuccess = await naimoStore.saveAudioFileInfo(image.path, detailId, audioFilePath);
+                const saveInfoSuccess = await naimoStore.saveAudioFileInfo(
+                  image.path,
+                  detailId,
+                  audioFilePath
+                );
                 if (saveInfoSuccess) {
-                  console.log('[taskStore.createAudioRunner] ✅ 音频保存流程完成', {
-                    audioUrl: audioUrl ? '已生成' : '未生成',
-                    audioFilePath
+                  console.log("[taskStore.createAudioRunner] ✅ 音频保存流程完成", {
+                    audioUrl: audioUrl ? "已生成" : "未生成",
+                    audioFilePath,
                   });
                 } else {
-                  console.error('[taskStore.createAudioRunner] ⚠️ 音频文件已保存，但保存配置信息失败');
+                  console.error(
+                    "[taskStore.createAudioRunner] ⚠️ 音频文件已保存，但保存配置信息失败"
+                  );
                 }
               } else {
-                console.error('[taskStore.createAudioRunner] ❌ 音频文件保存失败');
-                throw new Error('音频文件保存失败');
+                console.error("[taskStore.createAudioRunner] ❌ 音频文件保存失败");
+                throw new Error("音频文件保存失败");
               }
             } else {
-              console.error('[taskStore.createAudioRunner] ❌ 音频生成失败，返回 null');
-              throw new Error('音频生成失败');
+              console.error("[taskStore.createAudioRunner] ❌ 音频生成失败，返回 null");
+              throw new Error("音频生成失败");
             }
           } else {
             // 浏览器模式：使用网络音频生成
@@ -447,7 +442,7 @@ export const useTaskStore = defineStore("task-store", () => {
           }
 
           // 新音频成功生成后，销毁旧的音频 URL
-          if (oldAudioUrl && audioUrl && oldAudioUrl.startsWith('blob:')) {
+          if (oldAudioUrl && audioUrl && oldAudioUrl.startsWith("blob:")) {
             try {
               URL.revokeObjectURL(oldAudioUrl);
             } catch (e) {
@@ -472,8 +467,8 @@ export const useTaskStore = defineStore("task-store", () => {
             error?.name === "AbortError"
               ? "任务已取消"
               : typeof error?.message === "string"
-                ? error.message
-                : "生成音频失败";
+              ? error.message
+              : "生成音频失败";
           setTaskProgress(detailId, {
             loading: false,
             error: msg,
@@ -501,10 +496,9 @@ export const useTaskStore = defineStore("task-store", () => {
     // 检查是否已存在该detail的音频任务（等待中或运行中）
     if (hasAudioTask(detailId)) {
       // 如果是等待中的任务，取消并替换
-      const existingPendingTask = tasks.value.find(task =>
-        task.kind === 'audio' &&
-        task.detailId === detailId &&
-        task.status === 'pending'
+      const existingPendingTask = tasks.value.find(
+        (task) =>
+          task.kind === "audio" && task.detailId === detailId && task.status === "pending"
       );
 
       if (existingPendingTask) {
@@ -530,13 +524,11 @@ export const useTaskStore = defineStore("task-store", () => {
   ) => {
     const image = ocrStore.images.find((img) => img.id === imageId);
     if (!image?.ocrResult?.details?.length) return;
-    const targets = (image.ocrResult.details as OcrTextDetail[]).filter(
-      (detail) => {
-        if (!detail.id) return false;
-        if (mode === "skipDone" && detail.audioUrl) return false;
-        return true;
-      }
-    );
+    const targets = (image.ocrResult.details as OcrTextDetail[]).filter((detail) => {
+      if (!detail.id) return false;
+      if (mode === "skipDone" && detail.audioUrl) return false;
+      return true;
+    });
     targets.forEach((detail) => {
       if (detail.id) {
         startAudioForDetail(imageId, detail.id);
@@ -544,9 +536,7 @@ export const useTaskStore = defineStore("task-store", () => {
     });
   };
 
-  const startBatchAudioForAllImages = (
-    mode: "skipDone" | "forceAll" = "skipDone"
-  ) => {
+  const startBatchAudioForAllImages = (mode: "skipDone" | "forceAll" = "skipDone") => {
     const list = (ocrStore.images || []) as ImageItem[];
     list.forEach((img) => {
       if (!img?.ocrResult?.details?.length) return;
@@ -557,6 +547,8 @@ export const useTaskStore = defineStore("task-store", () => {
   type OcrRunnerOptions = {
     withAudio?: boolean;
     audioMode?: "skipDone" | "forceAll";
+    file?: File;
+    runOptions?: Parameters<typeof ocrStore.runOcrTask>[3];
   };
 
   const createOcrRunner = (
@@ -577,23 +569,56 @@ export const useTaskStore = defineStore("task-store", () => {
       execute: async () => {
         setOcrProgress(image.id, { loading: true, error: null });
         try {
-          await ocrStore.runOcrTask(image.id, image.file, applyResult);
+          const targetFile = options?.file ?? image.file;
+          await ocrStore.runOcrTask(
+            image.id,
+            targetFile,
+            applyResult,
+            options?.runOptions
+          );
           clearTaskProgress(image.id);
           if (options?.withAudio) {
             startBatchAudioForImage(image.id, options.audioMode);
           }
+          setOcrProgress(image.id, { loading: false });
         } catch (error: any) {
           const msg =
             error?.name === "AbortError"
               ? "任务已取消"
               : typeof error?.message === "string"
-                ? error.message
-                : "OCR 任务执行失败";
+              ? error.message
+              : "OCR 任务执行失败";
           setOcrProgress(image.id, { loading: false, error: msg });
           throw error;
         }
       },
     };
+  };
+
+  const runOcrImmediately = async (
+    image: ImageItem,
+    applyResult: OcrApplyResultFn,
+    options?: OcrRunnerOptions
+  ) => {
+    const runner = createOcrRunner(image, applyResult, options);
+    pendingRunners.set(runner.taskId, runner);
+    updateTask(runner.taskId, { status: "running", errorMessage: null });
+    try {
+      await runner.execute();
+      updateTask(runner.taskId, { status: "success", errorMessage: null });
+    } catch (error: any) {
+      const status: TaskStatus = error?.name === "AbortError" ? "cancelled" : "error";
+      const msg =
+        error?.name === "AbortError"
+          ? "任务已取消"
+          : typeof error?.message === "string"
+          ? error.message
+          : "OCR 任务执行失败";
+      updateTask(runner.taskId, { status, errorMessage: msg });
+      throw error;
+    } finally {
+      pendingRunners.delete(runner.taskId);
+    }
   };
 
   const startOcrForImage = (
@@ -604,10 +629,9 @@ export const useTaskStore = defineStore("task-store", () => {
     // 检查是否已存在该image的OCR任务（等待中或运行中）
     if (hasOcrTask(image.id)) {
       // 如果是等待中的任务，取消并替换
-      const existingPendingTask = tasks.value.find(task =>
-        task.kind === 'ocr' &&
-        task.imageId === image.id &&
-        task.status === 'pending'
+      const existingPendingTask = tasks.value.find(
+        (task) =>
+          task.kind === "ocr" && task.imageId === image.id && task.status === "pending"
       );
 
       if (existingPendingTask) {
@@ -640,17 +664,15 @@ export const useTaskStore = defineStore("task-store", () => {
         (_prev, next) => next,
         options
           ? {
-            ...options,
-            audioMode: options.audioMode || mode,
-          }
+              ...options,
+              audioMode: options.audioMode || mode,
+            }
           : undefined
       );
     });
   };
 
-  const startBatchAudioForCurrentImage = (
-    mode: "skipDone" | "forceAll" = "skipDone"
-  ) => {
+  const startBatchAudioForCurrentImage = (mode: "skipDone" | "forceAll" = "skipDone") => {
     const image = ocrStore.currentImage;
     if (!image) return;
     startBatchAudioForImage(image.id, mode);
@@ -673,6 +695,7 @@ export const useTaskStore = defineStore("task-store", () => {
     progressStates: computed(() => progressStates.value),
     canBatchOcr,
     canBatchAudio,
+    runOcrImmediately,
     startOcrForImage,
     startBatchOcr,
     startAudioForDetail,
@@ -693,4 +716,3 @@ export const useTaskStore = defineStore("task-store", () => {
     clearTaskProgress,
   };
 });
-
