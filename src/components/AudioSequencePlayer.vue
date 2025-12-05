@@ -268,7 +268,7 @@
             <!-- 全屏 -->
             <button
               type="button"
-              class="flex h-8 w-8 items-center justify-center text-white/70 transition hover:text-white"
+              class="hidden _flex h-8 w-8 items-center justify-center text-white/70 transition hover:text-white"
               @click="toggleFullscreen"
             >
               <svg
@@ -467,6 +467,17 @@ const playbackRate = useLocalStorage<number>("asp-playback-rate", 1);
 const clampVolume = (val: number) =>
   Math.min(1, Math.max(0, Number.isFinite(val) ? val : 1));
 const normalizeRate = (val: number) => (Number.isFinite(val) && val > 0 ? val : 1);
+
+const applyAudioPreferences = (audio: HTMLAudioElement | null) => {
+  if (!audio) return;
+  const v = clampVolume(volume.value);
+  const rate = normalizeRate(playbackRate.value);
+  audio.volume = v;
+  audio.playbackRate = rate;
+  audio.defaultPlaybackRate = rate;
+  if (volume.value !== v) volume.value = v;
+  if (playbackRate.value !== rate) playbackRate.value = rate;
+};
 
 // 全屏状态
 const isFullscreen = ref(false);
@@ -727,6 +738,7 @@ const updatePlaybackPosition = async (
     audio.src = item.audio;
     audio.dataset.currentIndex = String(index);
     audio.load();
+    applyAudioPreferences(audio);
   }
 
   try {
@@ -940,6 +952,7 @@ const handleAudioTimeUpdate = async (_e: Event) => {
 const handleAudioLoadedMetadata = () => {
   const audio = audioRef.value;
   if (!audio) return;
+  applyAudioPreferences(audio);
   const idx = currentIndex.value;
   const loadedDuration = audio.duration;
   if (Number.isFinite(loadedDuration) && loadedDuration > 0) {
