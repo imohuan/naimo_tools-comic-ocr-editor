@@ -40,35 +40,18 @@
 
       <!-- 字幕 -->
       <div
-        v-if="currentText"
+        v-if="showSubtitle && currentText"
         class="pointer-events-none absolute bottom-3 left-1/2 max-w-[80%] -translate-x-1/2 rounded-lg bg-black/30 px-4 py-1.5 text-center text-sm shadow-xl backdrop-blur"
       >
         {{ currentText }}
       </div>
 
       <!-- 底部控制区：悬停时显示，离开 3s 后自动隐藏 -->
+      <!-- bg-gradient-to-t from-black/80 via-black/60 to-transparent -->
       <div
         v-show="showControls"
-        class="absolute bottom-0 left-0 right-0 z-10 flex flex-col bg-gradient-to-t from-black/80 via-black/60 to-transparent px-2 pb-1 pt-1"
+        class="absolute bottom-0 left-0 right-0 z-10 flex flex-col px-2 pb-1 pt-1"
       >
-        <!-- 时间轴（2px 高度） -->
-        <div class="flex items-center gap-3 text-xs text-white/70">
-          <div class="flex-1">
-            <n-slider
-              :value="timelineValue"
-              :min="0"
-              :max="Math.max(totalDuration, 0.01)"
-              :step="0.01"
-              :disabled="!canInteractTimeline"
-              :style="{
-                '--n-rail-height': '2px',
-                '--n-handle-size': '10px',
-              }"
-              @update:value="handleTimelineUpdate"
-            />
-          </div>
-        </div>
-
         <!-- 控制条：上一段 / 播放 / 下一段 + 右侧音量/倍速/全屏 -->
         <div class="mt-1 flex items-center justify-between gap-4 text-xs">
           <!-- 左侧：段控制 + 当前段落计数 -->
@@ -156,6 +139,54 @@
 
           <!-- 右侧：音量 / 倍速 / 全屏 -->
           <div class="flex items-center gap-4">
+            <!-- 字幕开关 -->
+            <button
+              type="button"
+              class="flex h-8 w-8 items-center justify-center text-white/70 transition hover:text-emerald-400"
+              :class="showSubtitle ? 'text-emerald-400' : ''"
+              @click="showSubtitle = !showSubtitle"
+            >
+              <svg
+                v-if="showSubtitle"
+                viewBox="0 0 24 24"
+                class="h-4 w-4"
+                fill="none"
+                stroke="currentColor"
+                stroke-width="2"
+                stroke-linecap="round"
+                stroke-linejoin="round"
+              >
+                <path
+                  d="M3 6a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2v12a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"
+                />
+                <path d="M7 11h4" />
+                <path d="M13 11h4" />
+                <path d="M7 15h4" />
+                <path d="M13 15h2" />
+                <path d="M6 7l1.5 2" />
+                <path d="M18 7l-1.5 2" />
+              </svg>
+              <svg
+                v-else
+                viewBox="0 0 24 24"
+                class="h-4 w-4"
+                fill="none"
+                stroke="currentColor"
+                stroke-width="2"
+                stroke-linecap="round"
+                stroke-linejoin="round"
+              >
+                <path
+                  d="M3 6a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2v12a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"
+                />
+                <path d="M7 11h4" />
+                <path d="M13 11h4" />
+                <path d="M7 15h4" />
+                <path d="M13 15h2" />
+                <path d="M4 4l16 16" />
+              </svg>
+            </button>
+
             <!-- 音量：悬浮垂直滑条 -->
             <div
               class="relative flex items-center"
@@ -271,6 +302,25 @@
                 <path d="M15 21h4a2 2 0 0 0 2-2v-4" />
               </svg>
             </button>
+          </div>
+        </div>
+
+        <!-- 时间轴（2px 高度） -->
+        <div class="flex items-center gap-3 text-xs text-white/70">
+          <div class="flex-1">
+            <n-slider
+              :value="timelineValue"
+              :tooltip="false"
+              :min="0"
+              :max="Math.max(totalDuration, 0.01)"
+              :step="0.01"
+              :disabled="!canInteractTimeline"
+              :style="{
+                '--n-rail-height': '2px',
+                '--n-handle-size': '10px',
+              }"
+              @update:value="handleTimelineUpdate"
+            />
           </div>
         </div>
       </div>
@@ -417,6 +467,7 @@ const playbackRate = ref(1);
 const isFullscreen = ref(false);
 const showVolumePanel = ref(false);
 const showRatePanel = ref(false);
+const showSubtitle = ref(true);
 const rateOptions = [0.5, 0.75, 1, 1.25, 1.5, 2];
 
 const totalDuration = computed(() =>
