@@ -117,7 +117,6 @@ export const useOcrStore = defineStore("ocr-store", () => {
             path: img.path,
             name: img.name,
             ocrResult: null,
-            ocrLoading: false,
           }
         });
         return await deserializeImages(config, imageItems);
@@ -127,9 +126,6 @@ export const useOcrStore = defineStore("ocr-store", () => {
 
   // 当前选中的图片索引
   const currentIndex = ref(0);
-
-  // 全局 OCR 加载状态
-  const ocrLoading = ref<boolean>(false);
 
   // 当前图片
   const currentImage = computed<ImageItem | null>(() => {
@@ -197,7 +193,6 @@ export const useOcrStore = defineStore("ocr-store", () => {
         file,
         url,
         ocrResult: null,
-        ocrLoading: false,
         processedImageUrl: null,
       });
     });
@@ -397,9 +392,6 @@ export const useOcrStore = defineStore("ocr-store", () => {
       await ensureImageUrl(imageRef);
     }
 
-    ocrLoading.value = true;
-    imageRef.ocrLoading = true;
-
     try {
       // 处理好的图片 URL 回调
       const onProcessedImage = async (imageUrl: string) => {
@@ -487,11 +479,7 @@ export const useOcrStore = defineStore("ocr-store", () => {
       target.ocrResult = ensureDetailIds(merged);
     } catch (error) {
       console.error("OCR 请求失败:", error);
-    } finally {
-      // 第三次查找可以省略，直接用最初的引用关闭 loading；
-      // 即使图片已从列表移除，也只是一个悬挂引用，不会影响 UI。
-      imageRef.ocrLoading = false;
-      ocrLoading.value = false;
+      throw error;
     }
   };
 
@@ -590,7 +578,6 @@ export const useOcrStore = defineStore("ocr-store", () => {
   return {
     images,
     currentIndex,
-    ocrLoading,
     currentImage,
     currentDetails,
     addImages,

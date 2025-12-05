@@ -197,7 +197,7 @@
               </button>
               <!-- OCR状态指示 / 加载中指示 -->
               <div
-                v-if="item.ocrLoading"
+                v-if="isImageOcrLoading(item)"
                 class="absolute bottom-1 left-1 bg-white/90 text-blue-600 text-xs px-1.5 py-0.5 rounded flex items-center justify-center"
               >
                 <svg
@@ -612,6 +612,10 @@ const isImagePendingOcr = (image: ImageItem) => {
 // 检查图片是否已有OCR任务（等待中或运行中）
 const hasImageOcrTask = (image: ImageItem) => {
   return image.id ? taskStore.hasOcrTask(image.id) : false;
+};
+
+const isImageOcrLoading = (image: ImageItem) => {
+  return image.id ? taskStore.getProgressByKey(image.id).loading : false;
 };
 
 // 批量 OCR 模式：仅处理未 OCR / 强制全部 OCR（UI 状态）

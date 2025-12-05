@@ -96,6 +96,11 @@ export const useTaskStore = defineStore("task-store", () => {
     return progressStates.value[key] || defaultProgressState;
   };
 
+  const setOcrProgress = (imageId: string, patch: Partial<TaskProgressState>) => {
+    if (!imageId) return;
+    setTaskProgress(imageId, patch);
+  };
+
   // 检查特定detail是否在等待队列中
   const isPendingAudioTask = (detailId: string): boolean => {
     return tasks.value.some(task =>
@@ -300,11 +305,9 @@ export const useTaskStore = defineStore("task-store", () => {
     tasks.value = tasks.value.filter((task) => task.status === "running");
   };
 
+  // 供任务列表使用：统一走 cancelRunningTask，确保状态与队列正确更新
   const stopTask = (taskId: string) => {
-    const runner = runningRunners.get(taskId);
-    if (!runner || runner.kind !== "audio" || !runner.abort) return false;
-    runner.abort();
-    return true;
+    return cancelRunningTask(taskId);
   };
 
   // 删除特定detail的音频任务（等待中或运行中）
@@ -572,9 +575,22 @@ export const useTaskStore = defineStore("task-store", () => {
       taskId: task.id,
       kind: "ocr",
       execute: async () => {
-        await ocrStore.runOcrTask(image.id, image.file, applyResult);
-        if (options?.withAudio) {
-          startBatchAudioForImage(image.id, options.audioMode);
+        setOcrProgress(image.id, { loading: true, error: null });
+        try {
+          await ocrStore.runOcrTask(image.id, image.file, applyResult);
+          clearTaskProgress(image.id);
+          if (options?.withAudio) {
+            startBatchAudioForImage(image.id, options.audioMode);
+          }
+        } catch (error: any) {
+          const msg =
+            error?.name === "AbortError"
+              ? "任务已取消"
+              : typeof error?.message === "string"
+                ? error.message
+                : "OCR 任务执行失败";
+          setOcrProgress(image.id, { loading: false, error: msg });
+          throw error;
         }
       },
     };
@@ -668,6 +684,7 @@ export const useTaskStore = defineStore("task-store", () => {
     clearTasks,
     setAudioConcurrency,
     getProgressByKey,
+    setOcrProgress,
     isPendingAudioTask,
     isPendingOcrTask,
     hasAudioTask,

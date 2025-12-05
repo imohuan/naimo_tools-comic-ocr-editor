@@ -54,7 +54,6 @@ export interface ImageItem {
   path?: string; // 图片文件路径（仅在 Electron 项目模式下存在）
   name?: string; // 图片文件名（仅在 Electron 项目模式下存在）
   ocrResult: OcrTextResult | null;
-  ocrLoading: boolean;
   // 处理好的图片 URL（如 final.png），如果存在则优先使用此图片替换原图
   processedImageUrl?: string | null;
   // 处理图片的本地路径（项目模式）
