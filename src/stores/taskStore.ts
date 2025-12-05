@@ -60,6 +60,7 @@ export const useTaskStore = defineStore("task-store", () => {
   };
   const pendingRunners = new Map<string, TaskRunner>();
   const runningRunners = new Map<string, TaskRunner>();
+  const cancelledRunningTasks = new Set<string>();
 
   const runningCounts = ref({
     ocr: 0,
@@ -225,6 +226,11 @@ export const useTaskStore = defineStore("task-store", () => {
         }
       })
       .finally(() => {
+        if (cancelledRunningTasks.has(runner.taskId)) {
+          // 已被外部强制取消并清理过，跳过重复清理
+          cancelledRunningTasks.delete(runner.taskId);
+          return;
+        }
         runningRunners.delete(runner.taskId);
         runningCounts.value = {
           ...runningCounts.value,
@@ -232,6 +238,30 @@ export const useTaskStore = defineStore("task-store", () => {
         };
         processQueue(kind);
       });
+  };
+
+  const cancelRunningTask = (taskId: string): boolean => {
+    const task = tasks.value.find((t) => t.id === taskId);
+    if (!task || task.status !== "running") return false;
+    const runner = runningRunners.get(taskId);
+    if (runner && runner.kind === "audio" && runner.abort) {
+      runner.abort();
+    }
+    runningRunners.delete(taskId);
+    runningCounts.value = {
+      ...runningCounts.value,
+      [task.kind]: Math.max(0, runningCounts.value[task.kind] - 1),
+    };
+    updateTask(taskId, {
+      status: "cancelled",
+      errorMessage: "任务已取消",
+    });
+    if (task.detailId) {
+      clearTaskProgress(task.detailId);
+    }
+    cancelledRunningTasks.add(taskId);
+    processQueue(task.kind);
+    return true;
   };
 
   const cancelPendingTask = (taskId: string) => {
@@ -297,7 +327,7 @@ export const useTaskStore = defineStore("task-store", () => {
     );
 
     if (runningTask) {
-      return stopTask(runningTask.id);
+      return cancelRunningTask(runningTask.id);
     }
 
     return false;
