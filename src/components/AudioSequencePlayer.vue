@@ -344,6 +344,7 @@ import {
   useTimeoutFn,
   useDebounceFn,
   useEventListener,
+  useLocalStorage,
 } from "@vueuse/core";
 import { useSmoothProgress } from "../composables/useSmoothProgress";
 import { NSlider } from "naive-ui";
@@ -459,9 +460,13 @@ watch(
   { immediate: true }
 );
 
-// 音量 / 倍速
-const volume = ref(1);
-const playbackRate = ref(1);
+// 音量 / 倍速（使用本地存储持久化）
+const volume = useLocalStorage<number>("asp-volume", 1);
+const playbackRate = useLocalStorage<number>("asp-playback-rate", 1);
+
+const clampVolume = (val: number) =>
+  Math.min(1, Math.max(0, Number.isFinite(val) ? val : 1));
+const normalizeRate = (val: number) => (Number.isFinite(val) && val > 0 ? val : 1);
 
 // 全屏状态
 const isFullscreen = ref(false);
@@ -842,12 +847,30 @@ const seekTo = async (time: number, autoPlay = isPlaying.value) => {
 
 // 音量 / 倍速联动 audio 元素
 watch(
+  () => audioRef.value,
+  (audio) => {
+    if (!audio) return;
+    const v = clampVolume(volume.value);
+    const rate = normalizeRate(playbackRate.value);
+    audio.volume = v;
+    audio.playbackRate = rate;
+    if (volume.value !== v) volume.value = v;
+    if (playbackRate.value !== rate) playbackRate.value = rate;
+  },
+  { immediate: true }
+);
+
+watch(
   () => volume.value,
   (val) => {
     const audio = audioRef.value;
     if (!audio) return;
-    const v = Math.min(1, Math.max(0, Number.isFinite(val) ? val : 1));
+    const v = clampVolume(val);
     audio.volume = v;
+    // 把异常值回写为有效范围，避免存储脏数据
+    if (volume.value !== v) {
+      volume.value = v;
+    }
   },
   { immediate: true }
 );
@@ -857,8 +880,11 @@ watch(
   (val) => {
     const audio = audioRef.value;
     if (!audio) return;
-    const rate = Number.isFinite(val) && val > 0 ? val : 1;
+    const rate = normalizeRate(val);
     audio.playbackRate = rate;
+    if (playbackRate.value !== rate) {
+      playbackRate.value = rate;
+    }
   },
   { immediate: true }
 );
